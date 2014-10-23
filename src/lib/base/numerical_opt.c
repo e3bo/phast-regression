@@ -509,6 +509,10 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     /* function is evaluated in opt_lnsrch, value is returned in
        retval.  We'll ignore the value of "check" here (see Press, et
        al.) */
+
+    /* TODO find best regression coefficients and resulting xi, fval here */
+    /* 1. get design matrix and regression parameters here
+
     fval_old = fval;
     fval = *retval;
 
