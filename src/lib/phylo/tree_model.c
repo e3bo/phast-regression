@@ -164,6 +164,13 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->bound_arg = NULL;
   tm->scale_during_opt = 0;
   tm->iupac_inv_map = NULL;
+  
+  /* attributes needed when fitting regression model to rates*/
+  /* TODO add code to free and change header file*/
+  int ncoef = 2;
+  tm->eta_design_matrix = mat_new(nstate, ncoef);
+  tm->eta_coefficients = vec_new(ncoef);
+
   return tm;
 }
 
@@ -303,6 +310,10 @@ void tm_free(TreeModel *tm) {
     str_free(tm->noopt_arg);
   if (tm->iupac_inv_map != NULL)
     free_iupac_inv_map(tm->iupac_inv_map);
+  if (tm->eta_design_matrix != NULL)
+    mat_free(tm->design_matrix)
+  if (tm->eta_coefficients != NULL)
+    vec_free(tm->eta_coefficients)
   sfree(tm);
 }
 

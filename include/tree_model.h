@@ -219,6 +219,8 @@ struct tm_struct {
 				 Normally 0, but 1 if TM_BRANCHLENS_NONE, or
 				 if TM_SCALE and alt_subst_mods!=NULL */
   int **iupac_inv_map;          /**< Inverse map for IUPAC ambiguity characters */
+  Vector *eta_coefficients;     /* Regression coefficients for linear predictor of transition rates */
+  Matrix *eta_design_matrix;    /* Design matrix for linear predictor of transistion rates */    
 };
 
 typedef struct tm_struct TreeModel;
