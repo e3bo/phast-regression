@@ -21,6 +21,7 @@
 #include <sys/time.h>
 #include <sufficient_stats.h>
 #include <matrix.h>
+#include <vector.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <dgamma.h>
@@ -45,6 +46,7 @@
 #define ALT_MODEL_TAG "ALT_SUBST_MOD:"
 #define SELECTION_TAG "SELECTION_PAR:"
 #define BGC_TAG "BGC_PAR:"
+#define ETA_TAG "ETA_PAR:"
 
 
 #define BGC_SEL_LIMIT 200.0
@@ -166,11 +168,11 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->iupac_inv_map = NULL;
   
   /* attributes needed when fitting regression model to rates*/
-  /* TODO add code to free and change header file*/
   int ncoef = 2;
   int narcs = nstate*(nstate - 1);
   tm->eta_design_matrix = mat_new(narcs, ncoef);
   tm->eta_coefficients = vec_new(ncoef);
+  vec_set_all(tm->eta_coefficients, 0.5);
 
   return tm;
 }
@@ -645,6 +647,12 @@ void tm_print(FILE *F, TreeModel *tm) {
     for (i=0; i<lst_size(tm->alt_subst_mods); i++)
       tm_print_altmodel(F, lst_get_ptr(tm->alt_subst_mods, i), tm);
   }
+
+  if (tm->eta_coefficients != NULL) {
+    fprintf(F, "%s ", ETA_TAG);
+    vec_print(tm->eta_coefficients, F);
+  } 
+
 }
 
 /* Note: does not copy msa_seq_idx, tree_posteriors, P, rate_matrix_param_row,
