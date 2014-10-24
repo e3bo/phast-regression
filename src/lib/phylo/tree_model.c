@@ -54,7 +54,7 @@
 /* internal functions */
 double tm_likelihood_wrapper(Vector *params, void *data);
 double tm_multi_likelihood_wrapper(Vector *params, void *data);
-
+int regression_fit(Vector *params, void *data);
 
 /* tree == NULL implies weight matrix (most other params ignored in
    this case) */
@@ -2029,7 +2029,7 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
   retval = opt_bfgs(tm_likelihood_wrapper, opt_params, (void*)mod, &ll, 
                     lower_bounds, upper_bounds, logf, NULL, precision, 
 		    NULL, &numeval);
-
+  vec_scale(mod->eta_coefficients, -1);
   mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
                                    natural log scale */
   if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
@@ -2628,6 +2628,14 @@ double tm_likelihood_wrapper(Vector *params, void *data) {
      printf("\n");
   }*/
   return val;
+}
+
+/* TODO find best regression coefficients and resulting xi, fval here */
+int regression_fit(Vector *params, void *data){
+  TreeModel *mod = (TreeModel*)data;
+
+  vec_set_all(mod->eta_coefficients, 0.7);
+  return 0;
 }
 
 

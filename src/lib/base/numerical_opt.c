@@ -510,8 +510,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
        retval.  We'll ignore the value of "check" here (see Press, et
        al.) */
 
-    /* TODO find best regression coefficients and resulting xi, fval here */
-    /* 1. get design matrix and regression parameters here
+    regression_fit(params, data);
 
     fval_old = fval;
     fval = *retval;
