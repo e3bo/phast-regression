@@ -1,0 +1,6 @@
+*.[oa]
+*.help
+\#*#
+doc/
+bin/
+clapack-3.2.1-CMAKE
