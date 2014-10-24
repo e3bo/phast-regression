@@ -168,7 +168,7 @@ void mat_mult(Matrix *prod, Matrix *m1, Matrix *m2) {
 
 void mat_vec_mult(Vector *prod, Matrix *m, Vector *v) {
   int i, j;
-  if (!(m->nrows == v->size && v->size == prod->size))
+  if (!(m->nrows == prod->size && v->size == m->ncols))
     die("ERROR mat_vec_mult: bad dimensions\n");
   for (i = 0; i < m->nrows; i++) {
     prod->data[i] = 0;
