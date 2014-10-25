@@ -54,7 +54,7 @@
 /* internal functions */
 double tm_likelihood_wrapper(Vector *params, void *data);
 double tm_multi_likelihood_wrapper(Vector *params, void *data);
-int regression_fit(Vector *params, Matrix *Hinv, void *data);
+int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds);
 
 /* tree == NULL implies weight matrix (most other params ignored in
    this case) */
@@ -2631,7 +2631,7 @@ double tm_likelihood_wrapper(Vector *params, void *data) {
 }
 
 /* TODO find best regression coefficients and resulting xi, fval here */
-int regression_fit(Vector *params, Matrix *Hinv, void *data){
+int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds){
 
   TreeModel *mod; 
   Vector *beta, *eta;
@@ -2648,11 +2648,12 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data){
   eta = vec_new(X->nrows);
   mat_vec_mult(eta, X, beta);
   if (invert_ret ==0) {
-    vec_set_all(beta, 0.2);
+    printf("%s", "Invertible:\n");
   } else {
-    vec_set_all(beta, 0.8);
+    printf("%s", "Not Invertible:\n");
   }
-
+  mat_print(Hinv, stdout);
+  printf("%s", "\n");
   vec_free(eta);
   mat_free(H);
   return 0;
