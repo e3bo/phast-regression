@@ -510,7 +510,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
        retval.  We'll ignore the value of "check" here (see Press, et
        al.) */
 
-    regression_fit(params, H, data);
+    regression_fit(params, H, data, at_bounds, params_at_bounds);
 
     fval_old = fval;
     fval = *retval;

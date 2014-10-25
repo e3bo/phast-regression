@@ -54,7 +54,8 @@
 /* internal functions */
 double tm_likelihood_wrapper(Vector *params, void *data);
 double tm_multi_likelihood_wrapper(Vector *params, void *data);
-int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds);
+int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds);
+Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds);
 
 /* tree == NULL implies weight matrix (most other params ignored in
    this case) */
@@ -2631,19 +2632,22 @@ double tm_likelihood_wrapper(Vector *params, void *data) {
 }
 
 /* TODO find best regression coefficients and resulting xi, fval here */
-int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds){
+int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds){
 
   TreeModel *mod; 
   Vector *beta, *eta;
-  Matrix *X, *H;
-  int invert_ret=0;
+  Matrix *X, *HinvRed, *HRed;
+  int invert_ret, sz;
 
   mod = (TreeModel*)data;
   beta = mod->eta_coefficients;
   X = mod->eta_design_matrix;
 
-  H = mat_new(Hinv->nrows, Hinv->ncols);
-  invert_ret = mat_invert(H, Hinv);
+  HinvRed = mat_project_smaller(Hinv, at_bounds, params_at_bounds);
+  sz = at_bounds->size - params_at_bounds;
+  printf("size: %d\n", sz);
+  HRed = mat_new(sz, sz);
+  invert_ret = mat_invert(HRed, HinvRed);
   
   eta = vec_new(X->nrows);
   mat_vec_mult(eta, X, beta);
@@ -2652,13 +2656,41 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds){
   } else {
     printf("%s", "Not Invertible:\n");
   }
-  mat_print(Hinv, stdout);
+  mat_print(HRed, stdout);
+  printf("%s", "and it's inverse:\n");
+  mat_print(HinvRed, stdout);
   printf("%s", "\n");
   vec_free(eta);
-  mat_free(H);
+  mat_free(HRed);
+  mat_free(HinvRed);
   return 0;
 }
 
+/* Copy matrix but leave out rows and colums that are at bounds and thus all zeroes. */
+Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds) {
+  int i1, j1, i2, j2, sz1, sz2;
+  double m;
+  sz1 = at_bounds->size;
+  sz2 = sz1 - params_at_bounds;
+  Matrix *retval = mat_new(sz2, sz2);
+  if (!(src->nrows == sz1 && src->ncols == sz1))
+    die("ERROR mat_project_smaller: bad dimensions\n");
+  i2 = j2 = 0;
+  for (i1 = 0; i1 < sz1; i1++) {
+    if (vec_get(at_bounds, i1) == OPT_NO_BOUND) {
+      for (j1 = 0; j1 < sz1; j1++) {
+        if (vec_get(at_bounds, j1) == OPT_NO_BOUND) {
+          m = mat_get(src, j1, i1);
+          mat_set(retval, j2, i2, m);
+          j2++;
+        }
+      }
+      j2=0;
+      i2++;
+    }
+  }
+  return retval;
+}
 
 /*double tm_multi_likelihood_wrapper(Vector *params, void *data) {
   List *modlist = (List*)data;
