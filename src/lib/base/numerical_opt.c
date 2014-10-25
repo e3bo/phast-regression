@@ -105,6 +105,9 @@ opt_precision_type get_precision(const char *prec) {
    return OPT_UNKNOWN_PREC;
 }
 
+int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds);
+
+
 
 /* Numerically compute the gradient for the specified function at the
    specified parameter values.  Vector "grad" must already be

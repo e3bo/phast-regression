@@ -54,7 +54,6 @@
 /* internal functions */
 double tm_likelihood_wrapper(Vector *params, void *data);
 double tm_multi_likelihood_wrapper(Vector *params, void *data);
-int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds);
 Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds);
 
 /* tree == NULL implies weight matrix (most other params ignored in
@@ -2631,40 +2630,6 @@ double tm_likelihood_wrapper(Vector *params, void *data) {
   return val;
 }
 
-/* TODO find best regression coefficients and resulting xi, fval here */
-int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds){
-
-  TreeModel *mod; 
-  Vector *beta, *eta;
-  Matrix *X, *HinvRed, *HRed;
-  int invert_ret, sz;
-
-  mod = (TreeModel*)data;
-  beta = mod->eta_coefficients;
-  X = mod->eta_design_matrix;
-
-  HinvRed = mat_project_smaller(Hinv, at_bounds, params_at_bounds);
-  sz = at_bounds->size - params_at_bounds;
-  printf("size: %d\n", sz);
-  HRed = mat_new(sz, sz);
-  invert_ret = mat_invert(HRed, HinvRed);
-  
-  eta = vec_new(X->nrows);
-  mat_vec_mult(eta, X, beta);
-  if (invert_ret ==0) {
-    printf("%s", "Invertible:\n");
-  } else {
-    printf("%s", "Not Invertible:\n");
-  }
-  mat_print(HRed, stdout);
-  printf("%s", "and it's inverse:\n");
-  mat_print(HinvRed, stdout);
-  printf("%s", "\n");
-  vec_free(eta);
-  mat_free(HRed);
-  mat_free(HinvRed);
-  return 0;
-}
 
 /* Copy matrix but leave out rows and colums that are at bounds and thus all zeroes. */
 Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds) {
@@ -2675,13 +2640,14 @@ Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds
   Matrix *retval = mat_new(sz2, sz2);
   if (!(src->nrows == sz1 && src->ncols == sz1))
     die("ERROR mat_project_smaller: bad dimensions\n");
+  printf("%s\n", "hello");
   i2 = j2 = 0;
   for (i1 = 0; i1 < sz1; i1++) {
     if (vec_get(at_bounds, i1) == OPT_NO_BOUND) {
       for (j1 = 0; j1 < sz1; j1++) {
         if (vec_get(at_bounds, j1) == OPT_NO_BOUND) {
-          m = mat_get(src, j1, i1);
-          mat_set(retval, j2, i2, m);
+          m = mat_get(src, i1, j1);
+          mat_set(retval, i2, j2, m);
           j2++;
         }
       }
@@ -2691,6 +2657,76 @@ Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds
   }
   return retval;
 }
+
+/* Copy matrix but add rows and colums that are at bounds and thus all zeroes. */
+Matrix *mat_project_larger(Matrix *src, Vector *at_bounds, int params_at_bounds) {
+  int i1, j1, i2, j2, sz1, sz2;
+  double m, eps=1e-5;
+  sz1 = at_bounds->size;
+  sz2 = sz1 - params_at_bounds;
+  Matrix *retval = mat_new(sz1, sz1);
+  if (!(src->nrows == sz2 && src->ncols == sz2))
+    die("ERROR mat_project_larger: bad dimensions\n");
+  i2 = j2 = 0;
+  for (i1 = 0; i1 < sz1; i1++) {
+    if (vec_get(at_bounds, i1) == OPT_NO_BOUND) {
+      for (j1 = 0; j1 < sz1; j1++) {
+        if (vec_get(at_bounds, j1) == OPT_NO_BOUND) {
+          m = mat_get(src, i2, j2);
+          mat_set(retval, i1, j1, m);
+          j2++;
+        } else {
+          mat_set(retval, i1, j1, eps);
+        }
+      }
+      j2=0;
+      i2++;
+    } else {
+      for (j1 = 0; j1 < sz1; j1++) {
+        mat_set(retval, i1, j1, eps);
+      }
+    }
+  }
+  return retval;
+}
+
+/* TODO find best regression coefficients and resulting xi, fval here */
+int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds){
+
+  TreeModel *mod; 
+  Vector *beta, *eta;
+  Matrix *X, *HinvProj, *HProj, *H;
+  int invert_ret, sz;
+
+  mod = (TreeModel*)data;
+  beta = mod->eta_coefficients;
+  X = mod->eta_design_matrix;
+
+  HinvProj = mat_project_smaller(Hinv, at_bounds, params_at_bounds);
+  sz = at_bounds->size - params_at_bounds;
+  printf("size: %d\n", sz);
+  HProj = mat_new(sz, sz);
+  mat_invert(HProj, HinvProj);
+  H = mat_project_larger(HProj, at_bounds, params_at_bounds);
+
+  eta = vec_new(X->nrows);
+  mat_vec_mult(eta, X, beta);
+  if (invert_ret ==0) {
+    printf("%s", "Invertible:\n");
+  } else {
+    printf("%s", "Not Invertible:\n");
+  }
+  mat_print(HProj, stdout);
+  printf("%s", "and it's full version:\n");
+  mat_print(H, stdout);
+  printf("%s", "\n");
+  vec_free(eta);
+  mat_free(HProj);
+  mat_free(HinvProj);
+  mat_free(H);
+  return 0;
+}
+
 
 /*double tm_multi_likelihood_wrapper(Vector *params, void *data) {
   List *modlist = (List*)data;
