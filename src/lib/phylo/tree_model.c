@@ -2661,7 +2661,7 @@ Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds
 /* Copy matrix but add rows and colums that are at bounds and thus all zeroes. */
 Matrix *mat_project_larger(Matrix *src, Vector *at_bounds, int params_at_bounds) {
   int i1, j1, i2, j2, sz1, sz2;
-  double m, eps=1e-5;
+  double m;
   sz1 = at_bounds->size;
   sz2 = sz1 - params_at_bounds;
   Matrix *retval = mat_new(sz1, sz1);
@@ -2676,26 +2676,55 @@ Matrix *mat_project_larger(Matrix *src, Vector *at_bounds, int params_at_bounds)
           mat_set(retval, i1, j1, m);
           j2++;
         } else {
-          mat_set(retval, i1, j1, eps);
+          mat_set(retval, i1, j1, 0);
         }
       }
       j2=0;
       i2++;
     } else {
       for (j1 = 0; j1 < sz1; j1++) {
-        mat_set(retval, i1, j1, eps);
+        mat_set(retval, i1, j1, 0);
       }
     }
   }
   return retval;
 }
 
+Matrix *get_weights(Vector *eta, Matrix *H, Vector *g, Vector *at_bounds){
+  Vector *d;
+  Matrix *W;
+  int sz, i, j;
+  double m, eps=1e-5;
+
+  sz = H->nrows;
+  if (!(sz == H->ncols))
+    die("ERROR get_weights: non-square H\n");
+  W = mat_new(sz, sz);
+  for (i = 0; i<sz; i++){
+    for (j = 0; j<sz; j++){
+      if (vec_get(at_bounds, i) == OPT_NO_BOUND \
+          && vec_get(at_bounds, j) == OPT_NO_BOUND) {
+        m = vec_get(eta, i) + vec_get(eta, j);
+        m = exp(m);
+        m *= mat_get(H, i, j);
+        if (i == j){
+          m += vec_get(g, i) * exp(vec_get(eta, i));
+        }
+        mat_set(W, i, j, m);
+      } else {
+        mat_set(W, i, j, eps);
+      }
+    }
+  }
+  return W;
+}
+
 /* TODO find best regression coefficients and resulting xi, fval here */
-int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds){
+int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds, Vector *g){
 
   TreeModel *mod; 
   Vector *beta, *eta;
-  Matrix *X, *HinvProj, *HProj, *H;
+  Matrix *X, *HinvProj, *HProj, *H, *W;
   int invert_ret, sz;
 
   mod = (TreeModel*)data;
@@ -2711,19 +2740,20 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
 
   eta = vec_new(X->nrows);
   mat_vec_mult(eta, X, beta);
-  if (invert_ret ==0) {
-    printf("%s", "Invertible:\n");
-  } else {
-    printf("%s", "Not Invertible:\n");
-  }
-  mat_print(HProj, stdout);
-  printf("%s", "and it's full version:\n");
+  W = get_weights(eta, H, g, at_bounds);
+
+  printf("%s", "the gradient\n");
+  vec_print(g, stdout);
+  printf("%s", "the hessian wrt lambdas\n");
   mat_print(H, stdout);
+  printf("%s", "and it's W:\n");
+  mat_print(W, stdout);
   printf("%s", "\n");
   vec_free(eta);
   mat_free(HProj);
   mat_free(HinvProj);
   mat_free(H);
+  mat_free(W);
   return 0;
 }
 
