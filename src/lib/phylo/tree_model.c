@@ -2722,13 +2722,13 @@ Matrix *get_weights(Vector *eta, Matrix *H, Vector *g, Vector *at_bounds){
 }
 
 /* TODO find best regression coefficients and resulting xi, fval here */
-int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds, Vector *g){
+int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds, Vector *g, double (*func)(Vector*, void*), Vector* params_new, double* f){
 
   TreeModel *mod; 
   Vector *beta, *eta;
   Matrix *X, *HinvProj, *HProj, *H, *W;
   int invert_ret, sz, i;
-  double num, denom;
+  double num, denom, param;
 
   mod = (TreeModel*)data;
   beta = mod->eta_coefficients;
@@ -2747,7 +2747,7 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
 
   num = denom = 0;
   for(i = 0; i < W->nrows; i++){
-    num += mat_get(X, i, i) * mat_get(W, i, i) * log(vec_get(params, i));
+    num += mat_get(X, i, i) * mat_get(W, i, i) * log(vec_get(params_new, i));
     denom += mat_get(X, i, i) * mat_get(X, i, i) * mat_get(W, i, i);
   }
   vec_set(beta, 0, num/denom);
@@ -2757,6 +2757,16 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   mat_vec_mult(eta, X, beta);
   printf("new eta:\n");
   vec_print(eta, stdout);
+
+  /*update params_new*/
+  for(i = 0; i < params_new->size; i++){
+    param = vec_get(eta, i);
+    param = exp(param);
+    vec_set(params_new, i, param);
+  }
+  *f = func(params_new, data);
+
+
 
   /*  printf("%s", "the gradient\n");
   vec_print(g, stdout);

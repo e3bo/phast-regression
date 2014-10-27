@@ -105,7 +105,7 @@ opt_precision_type get_precision(const char *prec) {
    return OPT_UNKNOWN_PREC;
 }
 
-int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds, Vector *g);
+int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds, Vector *g, double (*func)(Vector*, void*), Vector* params_new, double* f);
 
 
 
@@ -513,7 +513,8 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
        retval.  We'll ignore the value of "check" here (see Press, et
        al.) */
 
-    regression_fit(params, H, data, at_bounds, params_at_bounds, g);
+    regression_fit(params, H, data, at_bounds, params_at_bounds, g,
+                   f, params_new, retval);
 
     fval_old = fval;
     fval = *retval;
