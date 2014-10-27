@@ -168,11 +168,13 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->iupac_inv_map = NULL;
   
   /* attributes needed when fitting regression model to rates*/
-  int ncoef = 2;
+  int ncoef = 1;
   int narcs = nstate*(nstate - 1);
-  tm->eta_design_matrix = mat_new(narcs, ncoef);
+  FILE *designMat = fopen("designMat", "r");
+  tm->eta_design_matrix = mat_new_from_file(designMat, narcs, ncoef);
+  fclose(designMat);
   tm->eta_coefficients = vec_new(ncoef);
-  vec_set_all(tm->eta_coefficients, 0.5);
+  vec_set_all(tm->eta_coefficients, 0);
 
   return tm;
 }
@@ -2725,7 +2727,8 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   TreeModel *mod; 
   Vector *beta, *eta;
   Matrix *X, *HinvProj, *HProj, *H, *W;
-  int invert_ret, sz;
+  int invert_ret, sz, i;
+  double num, denom;
 
   mod = (TreeModel*)data;
   beta = mod->eta_coefficients;
@@ -2742,13 +2745,26 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   mat_vec_mult(eta, X, beta);
   W = get_weights(eta, H, g, at_bounds);
 
-  printf("%s", "the gradient\n");
+  num = denom = 0;
+  for(i = 0; i < W->nrows; i++){
+    num += mat_get(X, i, i) * mat_get(W, i, i) * log(vec_get(params, i));
+    denom += mat_get(X, i, i) * mat_get(X, i, i) * mat_get(W, i, i);
+  }
+  vec_set(beta, 0, num/denom);
+  printf("num: %g\n", num);
+  printf("denom: %g\n", denom);
+
+  mat_vec_mult(eta, X, beta);
+  printf("new eta:\n");
+  vec_print(eta, stdout);
+
+  /*  printf("%s", "the gradient\n");
   vec_print(g, stdout);
   printf("%s", "the hessian wrt lambdas\n");
   mat_print(H, stdout);
   printf("%s", "and it's W:\n");
   mat_print(W, stdout);
-  printf("%s", "\n");
+  printf("%s", "\n"); */
   vec_free(eta);
   mat_free(HProj);
   mat_free(HinvProj);
