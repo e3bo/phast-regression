@@ -2755,14 +2755,8 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
 
   mat_vec_mult(eta, X, beta);
   
-  printf("last params\n");
-  vec_print(params, stdout);
 
   /*update params_new*/
-  printf("last objective:\n");
-  *f = func(params, data);
-  printf("%g\n", *f*log(2) *-1);
-
   for(i = 0; i < params_new->size; i++){
     param = vec_get(eta, i);
     param = param;
@@ -2770,20 +2764,11 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   }
   *f = func(params_new, data);
 
-  /*printf("the gradient\n");
+  printf("the gradient\n");
   vec_print(g, stdout);
   printf("the hessian wrt lambdas\n");
-  mat_print(H, stdout);*/
-  printf("new params:\n");
-  vec_print(params_new, stdout);
-  printf("new objective:\n");
-  printf("%g\n", *f*log(2) *-1);
-
-  printf("scaled params:\n");
-  vec_scale(eta, 10);
-  vec_print(eta, stdout);
-  printf("scaled objective:\n");
-  printf("%g\n", func(eta, data)*log(2) *-1);
+  mat_print(H, stdout);
+  printf("%g, %g\n", vec_get(params_new, 0), *f*log(2) *-1);
 
   /*printf("%s", "and it's W:\n");
   mat_print(W, stdout);
