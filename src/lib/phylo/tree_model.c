@@ -2031,10 +2031,10 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
   retval = opt_bfgs(tm_likelihood_wrapper, opt_params, (void*)mod, &ll, 
                     lower_bounds, upper_bounds, logf, NULL, precision, 
 		    NULL, &numeval);
-  vec_scale(mod->eta_coefficients, -1);
   mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
                                    natural log scale */
   if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
+  vec_print(opt_params, stdout);
   tm_unpack_params(mod, opt_params, -1);
   vec_copy(params, mod->all_params);
   vec_free(opt_params);
@@ -2050,6 +2050,7 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
                                    are not derived from the rate
                                    matrix) */
     tm_scale_model(mod, params, 1, 0);
+  
 
   if (mod->estimate_branchlens == TM_SCALE_ONLY) { 
                                 /* also, do final scaling of tree if
@@ -2642,7 +2643,6 @@ Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds
   Matrix *retval = mat_new(sz2, sz2);
   if (!(src->nrows == sz1 && src->ncols == sz1))
     die("ERROR mat_project_smaller: bad dimensions\n");
-  printf("%s\n", "hello");
   i2 = j2 = 0;
   for (i1 = 0; i1 < sz1; i1++) {
     if (vec_get(at_bounds, i1) == OPT_NO_BOUND) {
@@ -2736,7 +2736,6 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
 
   HinvProj = mat_project_smaller(Hinv, at_bounds, params_at_bounds);
   sz = at_bounds->size - params_at_bounds;
-  printf("size: %d\n", sz);
   HProj = mat_new(sz, sz);
   mat_invert(HProj, HinvProj);
   H = mat_project_larger(HProj, at_bounds, params_at_bounds);
@@ -2746,35 +2745,49 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   W = get_weights(eta, H, g, at_bounds);
 
   num = denom = 0;
-  for(i = 0; i < W->nrows; i++){
-    num += mat_get(X, i, i) * mat_get(W, i, i) * log(vec_get(params_new, i));
-    denom += mat_get(X, i, i) * mat_get(X, i, i) * mat_get(W, i, i);
+  for(i = 0; i < H->nrows; i++){
+    num += mat_get(X, i, i) * mat_get(H, i, i) * vec_get(params_new, i);
+    denom += mat_get(X, i, i) * mat_get(X, i, i) * mat_get(H, i, i);
   }
   vec_set(beta, 0, num/denom);
-  printf("num: %g\n", num);
-  printf("denom: %g\n", denom);
+  /*printf("num: %g\n", num);
+    printf("denom: %g\n", denom);*/
 
   mat_vec_mult(eta, X, beta);
-  printf("new eta:\n");
-  vec_print(eta, stdout);
+  
+  printf("last params\n");
+  vec_print(params, stdout);
 
   /*update params_new*/
+  printf("last objective:\n");
+  *f = func(params, data);
+  printf("%g\n", *f*log(2) *-1);
+
   for(i = 0; i < params_new->size; i++){
     param = vec_get(eta, i);
-    param = exp(param);
+    param = param;
     vec_set(params_new, i, param);
   }
   *f = func(params_new, data);
 
-
-
-  /*  printf("%s", "the gradient\n");
+  /*printf("the gradient\n");
   vec_print(g, stdout);
-  printf("%s", "the hessian wrt lambdas\n");
-  mat_print(H, stdout);
-  printf("%s", "and it's W:\n");
+  printf("the hessian wrt lambdas\n");
+  mat_print(H, stdout);*/
+  printf("new params:\n");
+  vec_print(params_new, stdout);
+  printf("new objective:\n");
+  printf("%g\n", *f*log(2) *-1);
+
+  printf("scaled params:\n");
+  vec_scale(eta, 10);
+  vec_print(eta, stdout);
+  printf("scaled objective:\n");
+  printf("%g\n", func(eta, data)*log(2) *-1);
+
+  /*printf("%s", "and it's W:\n");
   mat_print(W, stdout);
-  printf("%s", "\n"); */
+  printf("%s", "\n");*/
   vec_free(eta);
   mat_free(HProj);
   mat_free(HinvProj);
