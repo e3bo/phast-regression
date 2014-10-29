@@ -509,12 +509,14 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     /* minimize along xi */
     opt_lnsrch(params, fval, g, xi, params_new, retval, stpmax, &check, 
                f, data, &nevals, &lambda, logf); 
+
     /* function is evaluated in opt_lnsrch, value is returned in
        retval.  We'll ignore the value of "check" here (see Press, et
        al.) */
-
-    regression_fit(params, H, data, at_bounds, params_at_bounds, g,
+    if (its > 5){
+      regression_fit(params, H, data, at_bounds, params_at_bounds, g,
                    f, params_new, retval);
+    }
 
     fval_old = fval;
     fval = *retval;

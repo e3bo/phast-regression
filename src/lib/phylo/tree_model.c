@@ -2727,8 +2727,9 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   TreeModel *mod; 
   Vector *beta, *eta;
   Matrix *X, *HinvProj, *HProj, *H, *W;
-  int invert_ret, sz, i;
-  double num, denom, param;
+  int invert_ret, sz, i, j;
+  double a, b, zi, zj, xi, xj, wij;
+  double param, fnew;
 
   mod = (TreeModel*)data;
   beta = mod->eta_coefficients;
@@ -2744,26 +2745,35 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   mat_vec_mult(eta, X, beta);
   W = get_weights(eta, H, g, at_bounds);
 
-  num = denom = 0;
+  a = b = 0;
   for(i = 0; i < H->nrows; i++){
-    num += mat_get(X, i, i) * mat_get(H, i, i) * vec_get(params_new, i);
-    denom += mat_get(X, i, i) * mat_get(X, i, i) * mat_get(H, i, i);
+    for(j = 0; j < H->nrows; j++) {
+      zj = vec_get(params_new, j);
+      zi = vec_get(params_new, i);
+      xi = mat_get(X, i, 0);
+      xj = mat_get(X, j, 0);
+      wij = mat_get(H, i, j);
+      b -= wij * (xi*zj + xj*zi);
+      a += wij*xi*xj;
+      //      printf("i: %d, j: %d, wij: %g, a: %g, b: %g\n", i, j, wij, a, b);
+    }
   }
-  vec_set(beta, 0, num/denom);
-  /*printf("num: %g\n", num);
-    printf("denom: %g\n", denom);*/
 
-  mat_vec_mult(eta, X, beta);
+  b = -b/(2*a);
+  if (b < 0.01) b = 0.01;
+  vec_set(beta, 0, b);
+  printf("beta: %g\n", vec_get(beta, 0));
   
 
-  /*update params_new*/
-  for(i = 0; i < params_new->size; i++){
-    param = vec_get(eta, i);
-    param = param;
-    vec_set(params_new, i, param);
-  }
-  *f = func(params_new, data);
+  mat_vec_mult(eta, X, beta);
 
+  fnew = func(eta, data);
+  printf("fnew: %g, fold: %g\n", fnew, *f);
+  printf("desired point\n");
+  vec_print(params_new, stdout);
+  vec_copy(params_new, eta);
+  *f = fnew;
+  
   printf("the gradient\n");
   vec_print(g, stdout);
   printf("the hessian wrt lambdas\n");
