@@ -174,7 +174,7 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->eta_design_matrix = mat_new_from_file(designMat, narcs, ncoef);
   fclose(designMat);
   tm->eta_coefficients = vec_new(ncoef);
-  vec_set_all(tm->eta_coefficients, 0);
+  vec_set_all(tm->eta_coefficients, 0.33333);
 
   return tm;
 }
@@ -2759,11 +2759,31 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
     }
   }
 
-  b = -b/(2*a);
-  if (b < 0.000001) b = 0.000001;
-  vec_set(beta, 0, b);
-  mat_vec_mult(eta, X, beta);
+  double bFullStep = -b/(2*a);
+  double bZero = vec_get(beta, 0);
 
+  int nsteps = 100;
+  double x, xmin = bZero;
+  double min = func(params, data);
+  double cur;
+  for(i = 1; i <=nsteps; i++){
+    x = ((double) i/nsteps) * (bFullStep - bZero) + bZero;
+    if (x <= 0) break;
+    vec_set_all(eta, x);
+    cur = func(eta, data);
+    printf("x: %g, f(x) = %g\n", x, cur);
+    if (cur < min){
+      min = cur;
+      xmin = x;
+    }
+  }
+  vec_set(beta, 0, xmin);
+  mat_vec_mult(eta, X, beta);
+  fnew = min;
+  printf("current beta: %g, min beta: %g, full-step beta: %g\n", bZero, xmin, bFullStep);
+
+  printf("Current point\n");
+  vec_print(params, stdout);
   fnew = func(eta, data);
   printf("desired point\n");
   vec_print(params_new, stdout);
