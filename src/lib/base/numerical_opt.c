@@ -507,16 +507,19 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     trunc = scale_for_bounds(xi, params, lower_bounds, upper_bounds); 
 
     /* minimize along xi */
-    opt_lnsrch(params, fval, g, xi, params_new, retval, stpmax, &check, 
-               f, data, &nevals, &lambda, logf); 
+    /*opt_lnsrch(params, fval, g, xi, params_new, retval, stpmax, &check, 
+      f, data, &nevals, &lambda, logf); */
+    /* take full step */
+    vec_copy(params_new, params);
+    vec_plus_eq(params_new, xi);
+    lambda = 1.0;
 
     /* function is evaluated in opt_lnsrch, value is returned in
        retval.  We'll ignore the value of "check" here (see Press, et
        al.) */
-    if (its > 5){
       regression_fit(params, H, data, at_bounds, params_at_bounds, g,
                    f, params_new, retval);
-    }
+
 
     fval_old = fval;
     fval = *retval;
@@ -830,7 +833,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
    sending the function into undefined regions).  The value
    "check_convergence" is true when the routine terminates due to a
    new point falling too close to the old one (can typically be
-   ignored in minimziation).  The parameter "nevals" will incremented
+   ignored in minimization).  The parameter "nevals" will incremented
    each time the function is evaluated.  Function returns the value of
    the final scaling factor for "p" (lambda). */
 void opt_lnsrch(Vector *xold, double fold, Vector *g, Vector *p, 
