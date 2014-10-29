@@ -2760,15 +2760,11 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   }
 
   b = -b/(2*a);
-  if (b < 0.01) b = 0.01;
+  if (b < 0.000001) b = 0.000001;
   vec_set(beta, 0, b);
-  printf("beta: %g\n", vec_get(beta, 0));
-  
-
   mat_vec_mult(eta, X, beta);
 
   fnew = func(eta, data);
-  printf("fnew: %g, fold: %g\n", fnew, *f);
   printf("desired point\n");
   vec_print(params_new, stdout);
   vec_copy(params_new, eta);
@@ -2778,7 +2774,7 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   vec_print(g, stdout);
   printf("the hessian wrt lambdas\n");
   mat_print(H, stdout);
-  printf("%g, %g\n", vec_get(params_new, 0), *f*log(2) *-1);
+  printf("l(%g) =  %g\n", vec_get(params_new, 0), *f*log(2) *-1);
 
   /*printf("%s", "and it's W:\n");
   mat_print(W, stdout);
