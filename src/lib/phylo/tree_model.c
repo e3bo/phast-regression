@@ -2639,10 +2639,16 @@ double tm_likelihood_wrapper(Vector *params, void *data) {
 double tm_regression_likelihood_wrapper(Vector *rateParams, Vector *regressionParams, void *data) {
   TreeModel *mod = (TreeModel*)data;
   Matrix *X;
-  double val;
+  int i;
+  double val, tmp;
 
   X = mod->eta_design_matrix;
   mat_vec_mult(rateParams, X, regressionParams);
+  for(i = 0; i < rateParams->size; i++){
+    tmp = vec_get(rateParams, i);
+    tmp = exp(tmp);
+    vec_set(rateParams, i, tmp);
+  }
   val = tm_likelihood_wrapper(rateParams, data);
   return val;
 }
@@ -2761,11 +2767,11 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   a = b = 0;
   for(i = 0; i < H->nrows; i++){
     for(j = 0; j < H->nrows; j++) {
-      zj = vec_get(params_new, j);
-      zi = vec_get(params_new, i);
+      zj = log(vec_get(params_new, j));
+      zi = log(vec_get(params_new, i));
       xi = mat_get(X, i, 0);
       xj = mat_get(X, j, 0);
-      wij = mat_get(H, i, j);
+      wij = mat_get(W, i, j);
       b -= wij * (xi*zj + xj*zi);
       a += wij*xi*xj;
       //      printf("i: %d, j: %d, wij: %g, a: %g, b: %g\n", i, j, wij, a, b);
@@ -2775,13 +2781,14 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   double bFullStep = -b/(2*a);
   double bZero = vec_get(beta, 0);
 
+  /*vec_set(betaDirection, 0, bFullStep - bZero);*/
+
   int nsteps = 100;
   double x, xmin = bZero;
   double min = func(params, data);
   double cur;
   for(i = 1; i <=nsteps; i++){
     x = ((double) i/nsteps) * (bFullStep - bZero) + bZero;
-    if (x <= 0) break;
     vec_set(beta, 0, x);
     cur = tm_regression_likelihood_wrapper(eta, beta, data);
     printf("x: %g, f(x) = %g\n", x, cur);
@@ -2792,6 +2799,12 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   }
   vec_set(beta, 0, xmin);
   mat_vec_mult(eta, X, beta);
+  double tmp;
+  for(i = 0; i < eta->size; i++){
+    tmp = vec_get(eta, i);
+    tmp = exp(tmp);
+    vec_set(eta, i, tmp);
+  }
   fnew = min;
   printf("current beta: %g, min beta: %g, full-step beta: %g\n", bZero, xmin, bFullStep);
 
@@ -2812,12 +2825,16 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   /*printf("%s", "and it's W:\n");
   mat_print(W, stdout);
   printf("%s", "\n");*/
+
   vec_free(eta);
   mat_free(HProj);
   mat_free(HinvProj);
   mat_free(H);
   mat_free(W);
   return 0;
+
+
+
 }
 
 
