@@ -525,6 +525,16 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     
     vec_copy(params_new, params);
     vec_plus_eq(params_new, xi);
+
+    printf("params:\n");
+    vec_print(params, stdout);
+    printf("gradient:\n");
+    vec_print(g, stdout);
+    printf("xi:\n");
+    vec_print(xi, stdout);
+    printf("slope of descent\n");
+    printf("%g\n", vec_inner_prod(xi, g));
+
     get_beta_params_direction(H, data, at_bounds, params_at_bounds, g,
                               params_new, beta_direction);
     opt_gradient(greg, freg, beta_params, data, deriv_method, fval,

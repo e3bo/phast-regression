@@ -2655,7 +2655,7 @@ double tm_regression_likelihood_wrapper(Vector *beta_params, void *data) {
   mat_vec_mult(rate_params, X, beta_params);
   for(i = 0; i < rate_params->size; i++){
     tmp = vec_get(rate_params, i);
-    tmp = exp(tmp);
+    /*tmp = exp(tmp);*/
     vec_set(rate_params, i, tmp);
   }
   val = tm_likelihood_wrapper(rate_params, data);
@@ -2761,7 +2761,7 @@ void update_params(Vector *params_new, Vector *beta_params, void *data){
   mat_vec_mult(params_new, mod->eta_design_matrix, beta_params);
   for (i = 0; i < params_new->size; i++){
     tmp = vec_get(params_new, i);
-    tmp = exp(tmp);
+    //tmp = exp(tmp);
     vec_set(params_new, i, tmp);
   }
 }
@@ -2789,10 +2789,11 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
 
   eta = vec_new(X->nrows);
   mat_vec_mult(eta, X, beta);
-  W = get_weights(eta, B, g, at_bounds);
+  //W = get_weights(eta, B, g, at_bounds);
+  W = B;
   
   
-  printf("params:\n");
+  printf("target params:\n");
   vec_print(params_new, stdout);
   /*
   printf("\nW:\n");
@@ -2802,8 +2803,10 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   a = b = 0;
   for(i = 0; i < B->nrows; i++){
     for(j = 0; j < B->nrows; j++) {
-      zj = log(vec_get(params_new, j));
-      zi = log(vec_get(params_new, i));
+      /*zj = log(vec_get(params_new, j));
+      zi = log(vec_get(params_new, i));*/
+      zj = vec_get(params_new, j);
+      zi = vec_get(params_new, i);
       xi = mat_get(X, i, 0);
       xj = mat_get(X, j, 0);
       wij = mat_get(W, i, j);
@@ -2821,7 +2824,7 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   mat_free(Bproj);
   mat_free(Binv_proj);
   mat_free(B);
-  mat_free(W);
+  //mat_free(W);
   return;
 }
 
