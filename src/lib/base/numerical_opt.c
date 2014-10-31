@@ -410,6 +410,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
 
   int nreg = beta_params->size;
   Vector *greg, *beta_direction, *beta_params_new;
+  update_params(params, beta_params, data);
   
   greg = vec_new(nreg);
   beta_direction = vec_new(nreg);
@@ -521,26 +522,33 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     /* function is evaluated in opt_lnsrch, value is returned in
        retval.  We'll ignore the value of "check" here (see Press, et
        al.) */
-
-
+    
+    vec_copy(params_new, params);
+    vec_plus_eq(params_new, xi);
     get_beta_params_direction(H, data, at_bounds, params_at_bounds, g,
                               params_new, beta_direction);
-    vec_print(beta_direction, stdout);
-    /*
-    vec_print(beta_direction, stdout);
     opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
                  lower_bounds, upper_bounds, deriv_epsilon);
-
-    nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*beta_params->size;
+                 nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*beta_params->size;
+    printf("beta direction:\n");
+    vec_print(beta_direction, stdout);
+    printf("beta gradient:\n");
+    vec_print(greg, stdout);
+    printf("beta_params:\n");
+    vec_print(beta_params, stdout);
+    printf("fval = %g\n", fval);
+    
     opt_lnsrch(beta_params, fval, greg, beta_direction, beta_params_new, retval, stpmax,
                &check, freg, data, &nevals, &lambda, logf);
-    update_params(params_new, beta_params_new, data);
-    */
 
-    vec_copy(params_new, params);
-    
+    vec_print(beta_params_new, stdout);
+    printf("fregval = %g\nx:\n", *retval);
+
+    update_params(params_new, beta_params_new, data);
+    vec_copy(beta_params, beta_params_new);
+
     fval_old = fval;
-    //    fval = *retval;
+    fval = *retval;
 
     /* update line direction and current version of params */
     vec_copy(xi, params_new);

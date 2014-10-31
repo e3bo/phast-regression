@@ -2029,7 +2029,8 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
     }
   }
 
-  beta_params = vec_new(mod->eta_coefficients->size);  
+  beta_params = vec_new(mod->eta_coefficients->size);
+  vec_copy(beta_params, mod->eta_coefficients);
   if (!quiet) fprintf(stderr, "numpar = %i\n", opt_params->size);
   if (!quiet) fprintf(stderr, "numbetapar = %i\n", beta_params->size);
   retval = opt_bfgs(tm_likelihood_wrapper, opt_params, (void*)mod, &ll, 
@@ -2039,8 +2040,10 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
                                    natural log scale */
   if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
   tm_unpack_params(mod, opt_params, -1);
+  vec_copy(mod->eta_coefficients, beta_params);
   vec_copy(params, mod->all_params);
   vec_free(opt_params);
+  vec_free(beta_params);
 
   if (error_file != NULL)
     tm_variance(error_file, mod, msa, mod->all_params, cat);
@@ -2754,9 +2757,10 @@ void update_params(Vector *params_new, Vector *beta_params, void *data){
   double tmp;
   int i;
 
+  mod = (TreeModel*)data;
   mat_vec_mult(params_new, mod->eta_design_matrix, beta_params);
-  for (i = 0; i < beta_params->size; i++){
-    tmp = vec_get(beta_params, i);
+  for (i = 0; i < params_new->size; i++){
+    tmp = vec_get(params_new, i);
     tmp = exp(tmp);
     vec_set(params_new, i, tmp);
   }
@@ -2786,7 +2790,15 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   eta = vec_new(X->nrows);
   mat_vec_mult(eta, X, beta);
   W = get_weights(eta, B, g, at_bounds);
-
+  
+  
+  printf("params:\n");
+  vec_print(params_new, stdout);
+  /*
+  printf("\nW:\n");
+  mat_print(W, stdout);
+  printf("\n");*/
+  
   a = b = 0;
   for(i = 0; i < B->nrows; i++){
     for(j = 0; j < B->nrows; j++) {
@@ -2801,6 +2813,7 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   }
 
   beta_full_step = -b/(2*a);
+  printf("bfs: %g\n", beta_full_step);
   vec_set(beta_direction, 0, beta_full_step);
   vec_minus_eq(beta_direction, beta);
 
