@@ -55,6 +55,8 @@
 double tm_likelihood_wrapper(Vector *params, void *data);
 double tm_multi_likelihood_wrapper(Vector *params, void *data);
 Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds);
+Matrix *mat_project_larger(Matrix *src, Vector *at_bounds, int params_at_bounds);
+double tm_regression_likelihood_wrapper(Vector *rateParams, Vector *regressionParams, void *data);
 
 /* tree == NULL implies weight matrix (most other params ignored in
    this case) */
@@ -2633,6 +2635,17 @@ double tm_likelihood_wrapper(Vector *params, void *data) {
   return val;
 }
 
+/* Wrapper for computation of likelihood of data given regression parameters */
+double tm_regression_likelihood_wrapper(Vector *rateParams, Vector *regressionParams, void *data) {
+  TreeModel *mod = (TreeModel*)data;
+  Matrix *X;
+  double val;
+
+  X = mod->eta_design_matrix;
+  mat_vec_mult(rateParams, X, regressionParams);
+  val = tm_likelihood_wrapper(rateParams, data);
+  return val;
+}
 
 /* Copy matrix but leave out rows and colums that are at bounds and thus all zeroes. */
 Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds) {
@@ -2769,8 +2782,8 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
   for(i = 1; i <=nsteps; i++){
     x = ((double) i/nsteps) * (bFullStep - bZero) + bZero;
     if (x <= 0) break;
-    vec_set_all(eta, x);
-    cur = func(eta, data);
+    vec_set(beta, 0, x);
+    cur = tm_regression_likelihood_wrapper(eta, beta, data);
     printf("x: %g, f(x) = %g\n", x, cur);
     if (cur < min){
       min = cur;
