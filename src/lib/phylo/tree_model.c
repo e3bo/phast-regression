@@ -56,7 +56,7 @@ double tm_likelihood_wrapper(Vector *params, void *data);
 double tm_multi_likelihood_wrapper(Vector *params, void *data);
 Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds);
 Matrix *mat_project_larger(Matrix *src, Vector *at_bounds, int params_at_bounds);
-double tm_regression_likelihood_wrapper(Vector *rateParams, Vector *regressionParams, void *data);
+double tm_regression_likelihood_wrapper(Vector *beta_params, void *data);
 
 /* tree == NULL implies weight matrix (most other params ignored in
    this case) */
@@ -1966,7 +1966,7 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
            opt_precision_type precision, FILE *logf, int quiet,
 	   FILE *error_file) {
   double ll;
-  Vector *lower_bounds, *upper_bounds, *opt_params;
+  Vector *lower_bounds, *upper_bounds, *opt_params, *beta_params;
   int i, retval = 0, npar, numeval;
 
   if (msa->ss == NULL) {
@@ -2028,15 +2028,16 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
 	mod->scale_during_opt = 1;
     }
   }
-  
+
+  beta_params = vec_new(mod->eta_coefficients->size);  
   if (!quiet) fprintf(stderr, "numpar = %i\n", opt_params->size);
+  if (!quiet) fprintf(stderr, "numbetapar = %i\n", beta_params->size);
   retval = opt_bfgs(tm_likelihood_wrapper, opt_params, (void*)mod, &ll, 
                     lower_bounds, upper_bounds, logf, NULL, precision, 
-		    NULL, &numeval);
+		    NULL, &numeval, tm_regression_likelihood_wrapper, beta_params);
   mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
                                    natural log scale */
   if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
-  vec_print(opt_params, stdout);
   tm_unpack_params(mod, opt_params, -1);
   vec_copy(params, mod->all_params);
   vec_free(opt_params);
@@ -2107,6 +2108,8 @@ int tm_fit_multi(TreeModel **mod, int nmod, MSA **msa, int nmsa,
   Vector *lower_bounds, *upper_bounds, *opt_params;
   int i, j, retval = 0, npar, nstate, numeval;
   List *modlist;
+
+  Vector *beta_params;
 
   if (nmod != nmsa) {
     if (nmsa != 1) die("tm_fit_multi: expected one msa or one msa for each mod\n");
@@ -2184,7 +2187,7 @@ int tm_fit_multi(TreeModel **mod, int nmod, MSA **msa, int nmsa,
   for (i=0; i < nmod; i++) lst_push_ptr(modlist, mod[i]);
   retval = opt_bfgs(tm_multi_likelihood_wrapper, opt_params, (void*)modlist, 
 		    &ll, lower_bounds, upper_bounds, logf, NULL, precision, 
-		    NULL, &numeval);
+		    NULL, &numeval, tm_regression_likelihood_wrapper, beta_params);
   lst_free(modlist);
 
   for (j=0; j < nmod; j++)
@@ -2636,20 +2639,24 @@ double tm_likelihood_wrapper(Vector *params, void *data) {
 }
 
 /* Wrapper for computation of likelihood of data given regression parameters */
-double tm_regression_likelihood_wrapper(Vector *rateParams, Vector *regressionParams, void *data) {
+double tm_regression_likelihood_wrapper(Vector *beta_params, void *data) {
+
   TreeModel *mod = (TreeModel*)data;
   Matrix *X;
+  Vector *rate_params;
   int i;
   double val, tmp;
 
   X = mod->eta_design_matrix;
-  mat_vec_mult(rateParams, X, regressionParams);
-  for(i = 0; i < rateParams->size; i++){
-    tmp = vec_get(rateParams, i);
+  rate_params = vec_new(X->nrows);
+  mat_vec_mult(rate_params, X, beta_params);
+  for(i = 0; i < rate_params->size; i++){
+    tmp = vec_get(rate_params, i);
     tmp = exp(tmp);
-    vec_set(rateParams, i, tmp);
+    vec_set(rate_params, i, tmp);
   }
-  val = tm_likelihood_wrapper(rateParams, data);
+  val = tm_likelihood_wrapper(rate_params, data);
+  vec_free(rate_params);
   return val;
 }
 
@@ -2740,33 +2747,49 @@ Matrix *get_weights(Vector *eta, Matrix *H, Vector *g, Vector *at_bounds){
   return W;
 }
 
-/* TODO find best regression coefficients and resulting xi, fval here */
-int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds, Vector *g, double (*func)(Vector*, void*), Vector* params_new, double* f){
+/* Update rate parameters from beta parameters */
+void update_params(Vector *params_new, Vector *beta_params, void *data){
+
+  TreeModel *mod;
+  double tmp;
+  int i;
+
+  mat_vec_mult(params_new, mod->eta_design_matrix, beta_params);
+  for (i = 0; i < beta_params->size; i++){
+    tmp = vec_get(beta_params, i);
+    tmp = exp(tmp);
+    vec_set(params_new, i, tmp);
+  }
+}
+
+/* Find best regression coefficients based on quadratic approximation here */
+int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int params_at_bounds,
+                             Vector *g, Vector *params_new, Vector *beta_direction){
 
   TreeModel *mod; 
   Vector *beta, *eta;
-  Matrix *X, *HinvProj, *HProj, *H, *W;
-  int invert_ret, sz, i, j;
+  Matrix *X, *Binv_proj, *Bproj, *B, *W;
+  int sz, i, j;
   double a, b, zi, zj, xi, xj, wij;
-  double param, fnew;
+  double beta_full_step;
 
   mod = (TreeModel*)data;
   beta = mod->eta_coefficients;
   X = mod->eta_design_matrix;
 
-  HinvProj = mat_project_smaller(Hinv, at_bounds, params_at_bounds);
+  Binv_proj = mat_project_smaller(Binv, at_bounds, params_at_bounds);
   sz = at_bounds->size - params_at_bounds;
-  HProj = mat_new(sz, sz);
-  mat_invert(HProj, HinvProj);
-  H = mat_project_larger(HProj, at_bounds, params_at_bounds);
+  Bproj = mat_new(sz, sz);
+  mat_invert(Bproj, Binv_proj);
+  B = mat_project_larger(Bproj, at_bounds, params_at_bounds);
 
   eta = vec_new(X->nrows);
   mat_vec_mult(eta, X, beta);
-  W = get_weights(eta, H, g, at_bounds);
+  W = get_weights(eta, B, g, at_bounds);
 
   a = b = 0;
-  for(i = 0; i < H->nrows; i++){
-    for(j = 0; j < H->nrows; j++) {
+  for(i = 0; i < B->nrows; i++){
+    for(j = 0; j < B->nrows; j++) {
       zj = log(vec_get(params_new, j));
       zi = log(vec_get(params_new, i));
       xi = mat_get(X, i, 0);
@@ -2774,69 +2797,20 @@ int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, 
       wij = mat_get(W, i, j);
       b -= wij * (xi*zj + xj*zi);
       a += wij*xi*xj;
-      //      printf("i: %d, j: %d, wij: %g, a: %g, b: %g\n", i, j, wij, a, b);
     }
   }
 
-  double bFullStep = -b/(2*a);
-  double bZero = vec_get(beta, 0);
-
-  /*vec_set(betaDirection, 0, bFullStep - bZero);*/
-
-  int nsteps = 100;
-  double x, xmin = bZero;
-  double min = func(params, data);
-  double cur;
-  for(i = 1; i <=nsteps; i++){
-    x = ((double) i/nsteps) * (bFullStep - bZero) + bZero;
-    vec_set(beta, 0, x);
-    cur = tm_regression_likelihood_wrapper(eta, beta, data);
-    printf("x: %g, f(x) = %g\n", x, cur);
-    if (cur < min){
-      min = cur;
-      xmin = x;
-    }
-  }
-  vec_set(beta, 0, xmin);
-  mat_vec_mult(eta, X, beta);
-  double tmp;
-  for(i = 0; i < eta->size; i++){
-    tmp = vec_get(eta, i);
-    tmp = exp(tmp);
-    vec_set(eta, i, tmp);
-  }
-  fnew = min;
-  printf("current beta: %g, min beta: %g, full-step beta: %g\n", bZero, xmin, bFullStep);
-
-  printf("Current point\n");
-  vec_print(params, stdout);
-  fnew = func(eta, data);
-  printf("desired point\n");
-  vec_print(params_new, stdout);
-  vec_copy(params_new, eta);
-  *f = fnew;
-  
-  printf("the gradient\n");
-  vec_print(g, stdout);
-  printf("the hessian wrt lambdas\n");
-  mat_print(H, stdout);
-  printf("l(%g) =  %g\n", vec_get(params_new, 0), *f*log(2) *-1);
-
-  /*printf("%s", "and it's W:\n");
-  mat_print(W, stdout);
-  printf("%s", "\n");*/
+  beta_full_step = -b/(2*a);
+  vec_set(beta_direction, 0, beta_full_step);
+  vec_minus_eq(beta_direction, beta);
 
   vec_free(eta);
-  mat_free(HProj);
-  mat_free(HinvProj);
-  mat_free(H);
+  mat_free(Bproj);
+  mat_free(Binv_proj);
+  mat_free(B);
   mat_free(W);
-  return 0;
-
-
-
+  return;
 }
-
 
 /*double tm_multi_likelihood_wrapper(Vector *params, void *data) {
   List *modlist = (List*)data;

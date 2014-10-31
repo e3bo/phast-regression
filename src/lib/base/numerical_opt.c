@@ -105,8 +105,9 @@ opt_precision_type get_precision(const char *prec) {
    return OPT_UNKNOWN_PREC;
 }
 
-int regression_fit(Vector *params, Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds, Vector *g, double (*func)(Vector*, void*), Vector* params_new, double* f);
-
+void get_beta_params_direction(Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds,
+                               Vector *g, Vector *params_new, Vector *beta_direction);
+void update_params(Vector *params_new, Vector *beta_params, void *data);
 
 
 /* Numerically compute the gradient for the specified function at the
@@ -388,13 +389,14 @@ void check_H(Matrix *H, Vector *at_bounds){
 
 /* NOTE: added optional gradient function, to be used instead of
    opt_gradient if non-NULL */
-int opt_bfgs(double (*f)(Vector*, void*), Vector *params, 
-             void *data, double *retval, Vector *lower_bounds, 
+int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
+             void *data, double *retval, Vector *lower_bounds,
              Vector *upper_bounds, FILE *logf,
              void (*compute_grad)(Vector *grad, Vector *params,
                                   void *data, Vector *lb, Vector *ub),
              opt_precision_type precision, Matrix *inv_Hessian,
-	     int *num_evals) {
+	     int *num_evals, double (*freg)(Vector*, void*),
+             Vector *beta_params) {
   
   int check, i, its, n = params->size, success = 0, nevals = 0, 
     params_at_bounds = 0, new_at_bounds, //changed_dimension = 0,
@@ -405,6 +407,13 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
   Matrix *H, *first_frac, *sec_frac, *bfgs_term;
   opt_deriv_method deriv_method = OPT_DERIV_FORWARD;
   struct timeval start_time, end_time;
+
+  int nreg = beta_params->size;
+  Vector *greg, *beta_direction, *beta_params_new;
+  
+  greg = vec_new(nreg);
+  beta_direction = vec_new(nreg);
+  beta_params_new = vec_new(nreg);
 
   if (precision == OPT_UNKNOWN_PREC)
     die("unknown precision in opt_bfgs");
@@ -509,20 +518,29 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     /* minimize along xi */
     /*opt_lnsrch(params, fval, g, xi, params_new, retval, stpmax, &check, 
       f, data, &nevals, &lambda, logf); */
-    /* take full step */
-    vec_copy(params_new, params);
-    vec_plus_eq(params_new, xi);
-    lambda = 1.0;
-
     /* function is evaluated in opt_lnsrch, value is returned in
        retval.  We'll ignore the value of "check" here (see Press, et
        al.) */
-      regression_fit(params, H, data, at_bounds, params_at_bounds, g,
-                   f, params_new, retval);
 
 
+    get_beta_params_direction(H, data, at_bounds, params_at_bounds, g,
+                              params_new, beta_direction);
+    vec_print(beta_direction, stdout);
+    /*
+    vec_print(beta_direction, stdout);
+    opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
+                 lower_bounds, upper_bounds, deriv_epsilon);
+
+    nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*beta_params->size;
+    opt_lnsrch(beta_params, fval, greg, beta_direction, beta_params_new, retval, stpmax,
+               &check, freg, data, &nevals, &lambda, logf);
+    update_params(params_new, beta_params_new, data);
+    */
+
+    vec_copy(params_new, params);
+    
     fval_old = fval;
-    fval = *retval;
+    //    fval = *retval;
 
     /* update line direction and current version of params */
     vec_copy(xi, params_new);
