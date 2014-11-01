@@ -106,7 +106,7 @@ opt_precision_type get_precision(const char *prec) {
 }
 
 void get_beta_params_direction(Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds,
-                               Vector *g, Vector *params_new, Vector *beta_direction);
+                               Vector *g, Vector *params_new, Vector *beta_direction, Vector *beta_params);
 void update_params(Vector *params_new, Vector *beta_params, void *data);
 
 
@@ -536,7 +536,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     printf("%g\n", vec_inner_prod(xi, g));
 
     get_beta_params_direction(H, data, at_bounds, params_at_bounds, g,
-                              params_new, beta_direction);
+                              params_new, beta_direction, beta_params);
     opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
                  lower_bounds, upper_bounds, deriv_epsilon);
                  nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*beta_params->size;

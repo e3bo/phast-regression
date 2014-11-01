@@ -2768,7 +2768,7 @@ void update_params(Vector *params_new, Vector *beta_params, void *data){
 
 /* Find best regression coefficients based on quadratic approximation here */
 int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int params_at_bounds,
-                             Vector *g, Vector *params_new, Vector *beta_direction){
+                              Vector *g, Vector *params_new, Vector *beta_direction, Vector *beta_params){
 
   TreeModel *mod; 
   Vector *beta, *eta;
@@ -2778,7 +2778,7 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   double beta_full_step;
 
   mod = (TreeModel*)data;
-  beta = mod->eta_coefficients;
+  beta = beta_params;
   X = mod->eta_design_matrix;
 
   Binv_proj = mat_project_smaller(Binv, at_bounds, params_at_bounds);
@@ -2814,8 +2814,14 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
       a += wij*xi*xj;
     }
   }
+  
+  double deriv = 2*a*vec_get(beta, 0) + b;
+  beta_full_step = vec_get(beta, 0) -1/deriv;
+  if (beta_full_step <= 0) beta_full_step = -b/(2*a);
+  printf("approx. gradient: %g\n", deriv);
+  printf("b = %g\n", b);
+  printf("approx. hessian: %g\n", 2*a);
 
-  beta_full_step = -b/(2*a);
   printf("bfs: %g\n", beta_full_step);
   vec_set(beta_direction, 0, beta_full_step);
   vec_minus_eq(beta_direction, beta);
