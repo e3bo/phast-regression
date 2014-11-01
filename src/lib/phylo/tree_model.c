@@ -176,7 +176,7 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->eta_design_matrix = mat_new_from_file(designMat, narcs, ncoef);
   fclose(designMat);
   tm->eta_coefficients = vec_new(ncoef);
-  vec_set_all(tm->eta_coefficients, 0.33333);
+  vec_set_all(tm->eta_coefficients, 0.333);
 
   return tm;
 }
@@ -2041,6 +2041,7 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
   if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
   tm_unpack_params(mod, opt_params, -1);
   vec_copy(mod->eta_coefficients, beta_params);
+
   vec_copy(params, mod->all_params);
   vec_free(opt_params);
   vec_free(beta_params);
@@ -2754,25 +2755,34 @@ Matrix *get_weights(Vector *eta, Matrix *H, Vector *g, Vector *at_bounds){
 void update_params(Vector *params_new, Vector *beta_params, void *data){
 
   TreeModel *mod;
+  Vector *eta;
+  Matrix *X;
   double tmp;
   int i;
 
   mod = (TreeModel*)data;
-  mat_vec_mult(params_new, mod->eta_design_matrix, beta_params);
-  for (i = 0; i < params_new->size; i++){
-    tmp = vec_get(params_new, i);
+  X = mod->eta_design_matrix;
+
+  eta = vec_new(X->nrows);
+  mat_vec_mult(eta, X, beta_params);
+
+  if (mod->scale_idx != 0) die("Wrong assumption about scale parameter index");
+  for (i = 1; i < params_new->size; i++){
+    tmp = vec_get(eta, i - 1);
     //tmp = exp(tmp);
     vec_set(params_new, i, tmp);
   }
+  vec_free(eta);
 }
 
 /* Find best regression coefficients based on quadratic approximation here */
 int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int params_at_bounds,
-                              Vector *g, Vector *params_new, Vector *beta_direction, Vector *beta_params){
+                              Vector *g, Vector *params_new, Vector *beta_direction, 
+                              Vector *beta_params, double lambda){
 
   TreeModel *mod; 
   Vector *beta, *eta;
-  Matrix *X, *Binv_proj, *Bproj, *B, *W;
+  Matrix *X, *Binv_proj, *Bproj, *B, *W; 
   int sz, i, j;
   double a, b, zi, zj, xi, xj, wij;
   double beta_full_step;
@@ -2786,6 +2796,7 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   Bproj = mat_new(sz, sz);
   mat_invert(Bproj, Binv_proj);
   B = mat_project_larger(Bproj, at_bounds, params_at_bounds);
+  mat_scale(B, 1/lambda);
 
   eta = vec_new(X->nrows);
   mat_vec_mult(eta, X, beta);
@@ -2795,6 +2806,7 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   
   printf("target params:\n");
   vec_print(params_new, stdout);
+  printf("lambda: %g\n", lambda);
   /*
   printf("\nW:\n");
   mat_print(W, stdout);
@@ -2816,8 +2828,8 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   }
   
   double deriv = 2*a*vec_get(beta, 0) + b;
-  beta_full_step = vec_get(beta, 0) -1/deriv;
-  if (beta_full_step <= 0) beta_full_step = -b/(2*a);
+  /*beta_full_step = vec_get(beta, 0) - 1/deriv;*/
+  beta_full_step = -b/(2*a);
   printf("approx. gradient: %g\n", deriv);
   printf("b = %g\n", b);
   printf("approx. hessian: %g\n", 2*a);
