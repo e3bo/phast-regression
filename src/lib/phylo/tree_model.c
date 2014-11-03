@@ -176,7 +176,7 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->eta_design_matrix = mat_new_from_file(designMat, narcs, ncoef);
   fclose(designMat);
   tm->eta_coefficients = vec_new(ncoef);
-  vec_set_all(tm->eta_coefficients, 0.333);
+  vec_set_all(tm->eta_coefficients, 0.05);
 
   return tm;
 }
@@ -2766,9 +2766,9 @@ void update_params(Vector *params_new, Vector *beta_params, void *data){
   eta = vec_new(X->nrows);
   mat_vec_mult(eta, X, beta_params);
 
-  if (mod->scale_idx != 0) die("Wrong assumption about scale parameter index");
-  for (i = 1; i < params_new->size; i++){
-    tmp = vec_get(eta, i - 1);
+  /*if (mod->scale_idx != -1) die("Wrong assumption about scale parameter index");*/
+  for (i = 0; i < params_new->size; i++){
+    tmp = vec_get(eta, i);
     //tmp = exp(tmp);
     vec_set(params_new, i, tmp);
   }

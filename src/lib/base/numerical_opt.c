@@ -457,7 +457,6 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     opt_gradient(g, f, params, data, deriv_method, fval, lower_bounds, 
                  upper_bounds, deriv_epsilon);
     nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*params->size;
-    for (i = 1; i < g->size; i++){ vec_set(g, i, 0);}
   }
 
   /* test bounds of each parameter and set "at_bounds" appropriately */
@@ -556,7 +555,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     vec_print(beta_params_new, stdout);
     printf("fregval = %g\nx:\n", *retval);
     */
-    if (1) {
+    if (0) {
       /*vec_set_(beta_params_new, .05);*/
       update_params(params_new, beta_params_new, data);
       *retval = f(params_new, data);
@@ -642,7 +641,6 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
       opt_gradient(g, f, params, data, deriv_method, fval, lower_bounds, 
                    upper_bounds, deriv_epsilon);
       nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*params->size;
-      for (i = 1; i < g->size; i++){ vec_set(g, i, 0);}
     }
 
     if (logf != NULL) 
