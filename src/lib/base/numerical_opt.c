@@ -526,7 +526,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     
     /*vec_copy(params_new, params);
       vec_plus_eq(params_new, xi);*/
-    /*
+    
     printf("params:\n");
     vec_print(params, stdout);
     printf("gradient:\n");
@@ -538,29 +538,33 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     
     get_beta_params_direction(H, data, at_bounds, params_at_bounds, g,
                               params_new, beta_direction, beta_params, lambda);
-    opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
-                 lower_bounds, upper_bounds, deriv_epsilon);
-    nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*beta_params->size;
     printf("beta direction:\n");
     vec_print(beta_direction, stdout);
-    printf("beta gradient:\n");
-    vec_print(greg, stdout);
-    printf("beta_params:\n");
-    vec_print(beta_params, stdout);
-    printf("fval = %g\n", fval);
-    
-    opt_lnsrch(beta_params, fval, greg, beta_direction, beta_params_new, retval, stpmax,
-               &check, freg, data, &nevals, &lambda, logf);
 
-    vec_print(beta_params_new, stdout);
-    printf("fregval = %g\nx:\n", *retval);
-    */
-    if (0) {
-      /*vec_set_(beta_params_new, .05);*/
+    if (vec_norm(xi) > 0.1 & vec_norm(beta_direction) < 0.001) {
+      printf("skipping inner optimization\n");
+    } else {
+
+      opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
+                   lower_bounds, upper_bounds, deriv_epsilon);
+      nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*beta_params->size;
+      opt_lnsrch(beta_params, fval, greg, beta_direction, beta_params_new, retval, stpmax,
+                 &check, freg, data, &nevals, &lambda, logf);
+
+      printf("beta gradient:\n");
+      vec_print(greg, stdout);
+      printf("beta_params:\n");
+      vec_print(beta_params, stdout);
+      printf("fval = %g\n", fval);
+
+      vec_print(beta_params_new, stdout);
+      printf("fregval = %g\nx:\n", *retval);
+
       update_params(params_new, beta_params_new, data);
       *retval = f(params_new, data);
       vec_copy(beta_params, beta_params_new);
-      }
+    } 
+      
 
     fval_old = fval;
     fval = *retval;

@@ -176,7 +176,7 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->eta_design_matrix = mat_new_from_file(designMat, narcs, ncoef);
   fclose(designMat);
   tm->eta_coefficients = vec_new(ncoef);
-  vec_set_all(tm->eta_coefficients, 0.05);
+  vec_set_all(tm->eta_coefficients, 0.1);
 
   return tm;
 }
