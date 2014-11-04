@@ -409,9 +409,10 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
   opt_deriv_method deriv_method = OPT_DERIV_FORWARD;
   struct timeval start_time, end_time;
 
-  int nreg = beta_params->size, do_inner_opt = 0;
+  int nreg = beta_params->size, do_inner_opt = 0, did_inner_opt=0;
   Vector *greg, *beta_direction, *beta_params_new;
   update_params(params, beta_params, data);
+
 
   logf = stderr;
   
@@ -529,37 +530,42 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     /*vec_copy(params_new, params);
       vec_plus_eq(params_new, xi);*/
     
-    printf("xi direction: ");
+    /*printf("xi direction: ");
     vec_print(xi, stdout);
     printf("slope of descent: ");
-    printf("%g\n", vec_inner_prod(xi, g));
-    
+    printf("%g\n", vec_inner_prod(xi, g));*/
+
     if (do_inner_opt) {
       get_beta_params_direction(H, data, at_bounds, params_at_bounds, g,
                                 params_new, beta_direction, beta_params, lambda);
-      printf("beta direction: ");
-      vec_print(beta_direction, stdout);
-
       opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
                    lower_bounds, upper_bounds, deriv_epsilon);
       nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*beta_params->size;
-      opt_lnsrch(beta_params, fval, greg, beta_direction, beta_params_new, retval, stpmax,
+      if (did_inner_opt) { /* likleihood from last iteration will be comparable */
+        opt_lnsrch(beta_params, fval, greg, beta_direction, beta_params_new, retval, stpmax,
                  &check, freg, data, &nevals, &lambda, logf);
-
+      } else { /* this will initialize this inner optimization */
+        lambda = 1;
+        vec_copy(beta_params_new, beta_params);
+        vec_plus_eq(beta_params_new, beta_direction);
+      }     
+      printf("beta direction: ");
+      vec_print(beta_direction, stdout);
       printf("beta gradient: ");
       vec_print(greg, stdout);
       printf("beta_params: ");
       vec_print(beta_params, stdout);
-      printf("fval = %g\n", fval);
-
+      printf("beta params new: ");
       vec_print(beta_params_new, stdout);
+      printf("lambda: %g\n", lambda);      
+      printf("fval = %g\n", fval);
       printf("fregval = %g\n", *retval);
 
       update_params(params_new, beta_params_new, data);
       *retval = f(params_new, data);
       vec_copy(beta_params, beta_params_new);
+      did_inner_opt = 1;
     } 
-      
 
     fval_old = fval;
     fval = *retval;
@@ -595,7 +601,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     if (test <= TOLX(precision)) {
       if (logf != NULL) fprintf(logf, "Convergence via TOLX (%e <= %e)\n",
 				test, TOLX(precision));
-      if (do_inner_opt==1){
+      if (did_inner_opt==1){
         success = 1;
         break;
       } else {
@@ -608,7 +614,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     if (lambda > LAMBDA_THRESHOLD && 
         minsf >= SIGFIG(precision)) {
       if (logf != NULL) fprintf(logf, "Convergence via sigfigs (%d)\n", minsf);
-      if (do_inner_opt==1){
+      if (did_inner_opt==1){
         success = 1;
         break;
       } else {
@@ -619,7 +625,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     if (lambda > LAMBDA_THRESHOLD && 
         fabs((fval_old - fval) / fval) <= DELTA_FUNC(precision)) {
       if (logf != NULL) fprintf(logf, "Convergence via delta func\n");
-      if (do_inner_opt==1){
+      if (did_inner_opt==1){
         success = 1;
         break;
       } else {
@@ -674,8 +680,12 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     }
     if (test <= GTOL(precision)) {
       if (logf != NULL) fprintf(logf, "Convergence via gradiant tolerance (%e < %e)\n", test, GTOL(precision));
-      success = 1;
-      break;
+      if (did_inner_opt==1){
+        success = 1;
+        break;
+      } else {
+        do_inner_opt=1;
+      }
     }
 
     /* compute difference of gradients */
