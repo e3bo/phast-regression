@@ -170,9 +170,9 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->iupac_inv_map = NULL;
   
   /* attributes needed when fitting regression model to rates*/
-  int ncoef = 1;
+  int ncoef = 2;
   int narcs = nstate*(nstate - 1);
-  FILE *designMat = fopen("designMat", "r");
+  FILE *designMat = fopen("designMat2", "r");
   tm->eta_design_matrix = mat_new_from_file(designMat, narcs, ncoef);
   fclose(designMat);
   tm->eta_coefficients = vec_new(ncoef);
@@ -2033,6 +2033,10 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
   vec_copy(beta_params, mod->eta_coefficients);
   if (!quiet) fprintf(stderr, "numpar = %i\n", opt_params->size);
   if (!quiet) fprintf(stderr, "numbetapar = %i\n", beta_params->size);
+  if (!quiet) {
+    fprintf(stderr, "design matrix: \n"); 
+    mat_print(mod->eta_design_matrix, stderr);
+  }
   retval = opt_bfgs(tm_likelihood_wrapper, opt_params, (void*)mod, &ll, 
                     lower_bounds, upper_bounds, logf, NULL, precision, 
 		    NULL, &numeval, tm_regression_likelihood_wrapper, beta_params);
@@ -2781,11 +2785,11 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
                               Vector *beta_params, double lambda){
 
   TreeModel *mod; 
-  Vector *beta, *eta;
+  Vector *beta, *eta, *beta_no_k, *r, *beta_gradient, *beta_hess_diag, *beta_full_step;
   Matrix *X, *Binv_proj, *Bproj, *B, *W; 
-  int sz, i, j;
+  int sz, i, j, k;
   double a, b, zi, zj, xi, xj, wij;
-  double beta_full_step;
+  double beta_k_full_step, beta_k_deriv, beta_k_deriv2;
 
   mod = (TreeModel*)data;
   beta = beta_params;
@@ -2803,42 +2807,61 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   //W = get_weights(eta, B, g, at_bounds);
   W = B;
   
-  
   printf("target params:\n");
   vec_print(params_new, stdout);
-  printf("lambda: %g\n", lambda);
   /*
   printf("\nW:\n");
   mat_print(W, stdout);
   printf("\n");*/
-  
-  a = b = 0;
-  for(i = 0; i < B->nrows; i++){
-    for(j = 0; j < B->nrows; j++) {
-      /*zj = log(vec_get(params_new, j));
-      zi = log(vec_get(params_new, i));*/
-      zj = vec_get(params_new, j);
-      zi = vec_get(params_new, i);
-      xi = mat_get(X, i, 0);
-      xj = mat_get(X, j, 0);
-      wij = mat_get(W, i, j);
-      b -= wij * (xi*zj + xj*zi);
-      a += wij*xi*xj;
-    }
-  }
-  
-  double deriv = 2*a*vec_get(beta, 0) + b;
-  /*beta_full_step = vec_get(beta, 0) - 1/deriv;*/
-  beta_full_step = -b/(2*a);
-  printf("approx. gradient: %g\n", deriv);
-  printf("b = %g\n", b);
-  printf("approx. hessian: %g\n", 2*a);
 
-  printf("bfs: %g\n", beta_full_step);
-  vec_set(beta_direction, 0, beta_full_step);
+  beta_full_step = vec_new(beta->size);
+  beta_gradient = vec_new(beta->size);
+  beta_hess_diag = vec_new(beta->size);  
+  beta_no_k = vec_new(beta->size);
+  r = vec_new(B->nrows);
+  for(k = 0; k < beta->size; k++){
+    vec_copy(beta_no_k, beta);
+    vec_set(beta_no_k, k, 0);
+    mat_vec_mult(eta, X, beta_no_k);
+    vec_copy(r, params_new);
+    vec_minus_eq(r, eta);  
+
+    a = b = 0;
+    for(i = 0; i < B->nrows; i++){
+      for(j = 0; j < B->nrows; j++) {
+        /*zj = log(vec_get(params_new, j));
+        zi = log(vec_get(params_new, i));*/
+        zj = vec_get(r, j);
+        zi = vec_get(r, i);
+        xi = mat_get(X, i, k);
+        xj = mat_get(X, j, k);
+        wij = mat_get(W, i, j);
+        b -= wij * (xi*zj + xj*zi);
+        a += wij*xi*xj;
+      }
+    }
+    beta_k_full_step = -b/(2*a);  
+    beta_k_deriv = 2*a*vec_get(beta, k) + b;
+    beta_k_deriv2 = 2*a;
+    vec_set(beta_full_step, k, beta_k_full_step);
+    vec_set(beta_gradient, k, beta_k_deriv);
+    vec_set(beta_hess_diag, k, beta_k_deriv2);
+  }
+  vec_copy(beta_direction, beta_full_step);
   vec_minus_eq(beta_direction, beta);
 
+  printf("beta: "); vec_print(beta, stdout);
+  printf("beta_full_step: "); vec_print(beta_full_step, stdout);
+  printf("beta_direction: "); vec_print(beta_direction, stdout);
+  printf("beta_gradient: "); vec_print(beta_gradient, stdout);
+  printf("beta_hess_diag: "); vec_print(beta_hess_diag, stdout);
+
+  vec_free(r);
+  vec_free(beta_no_k);
   vec_free(eta);
+  vec_free(beta_full_step);
+  vec_free(beta_gradient);
+  vec_free(beta_hess_diag);
   mat_free(Bproj);
   mat_free(Binv_proj);
   mat_free(B);
