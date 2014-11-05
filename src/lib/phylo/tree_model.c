@@ -2037,7 +2037,7 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
     fprintf(stderr, "design matrix: \n"); 
     mat_print(mod->eta_design_matrix, stderr);
   }
-  retval = opt_bfgs(tm_likelihood_wrapper, opt_params, (void*)mod, &ll, 
+  retval = opt_bfgs_regression(tm_likelihood_wrapper, opt_params, (void*)mod, &ll, 
                     lower_bounds, upper_bounds, logf, NULL, precision, 
 		    NULL, &numeval, tm_regression_likelihood_wrapper, beta_params);
   mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
@@ -2195,7 +2195,7 @@ int tm_fit_multi(TreeModel **mod, int nmod, MSA **msa, int nmsa,
   for (i=0; i < nmod; i++) lst_push_ptr(modlist, mod[i]);
   retval = opt_bfgs(tm_multi_likelihood_wrapper, opt_params, (void*)modlist, 
 		    &ll, lower_bounds, upper_bounds, logf, NULL, precision, 
-		    NULL, &numeval, tm_regression_likelihood_wrapper, beta_params);
+		    NULL, &numeval);
   lst_free(modlist);
 
   for (j=0; j < nmod; j++)

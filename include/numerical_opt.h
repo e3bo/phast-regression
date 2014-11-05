@@ -45,7 +45,15 @@ void opt_gradient(Vector *grad, double (*f)(Vector*, void*),
                   double reference_val, Vector *lower_bounds, 
                   Vector *upper_bounds, double deriv_epsilon);
 
-int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
+int opt_bfgs(double (*f)(Vector*, void*), Vector *params, 
+             void *data, double *retval, Vector *lower_bounds, 
+             Vector *upper_bounds, FILE *logf,
+             void (*compute_grad)(Vector *grad, Vector *params,
+                                  void *data, Vector *lb, Vector *ub),
+             opt_precision_type precision, Matrix *inv_Hessian,
+             int *num_evals);
+
+int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
              void *data, double *retval, Vector *lower_bounds,
              Vector *upper_bounds, FILE *logf,
              void (*compute_grad)(Vector *grad, Vector *params,

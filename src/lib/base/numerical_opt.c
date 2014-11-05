@@ -390,7 +390,436 @@ void check_H(Matrix *H, Vector *at_bounds){
 
 /* NOTE: added optional gradient function, to be used instead of
    opt_gradient if non-NULL */
-int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
+int opt_bfgs(double (*f)(Vector*, void*), Vector *params, 
+             void *data, double *retval, Vector *lower_bounds, 
+             Vector *upper_bounds, FILE *logf,
+             void (*compute_grad)(Vector *grad, Vector *params,
+                                  void *data, Vector *lb, Vector *ub),
+             opt_precision_type precision, Matrix *inv_Hessian,
+	     int *num_evals) {
+  
+  int check, i, its, n = params->size, success = 0, nevals = 0, 
+    params_at_bounds = 0, new_at_bounds, //changed_dimension = 0,
+    trunc, already_failed = 0, minsf;
+  double den, fac, fae, fval, stpmax, temp, test, lambda, fval_old,
+    deriv_epsilon = DERIV_EPSILON;
+  Vector *dg, *g, *hdg, *params_new, *xi, *at_bounds;
+  Matrix *H, *first_frac, *sec_frac, *bfgs_term;
+  opt_deriv_method deriv_method = OPT_DERIV_FORWARD;
+  struct timeval start_time, end_time;
+
+  if (precision == OPT_UNKNOWN_PREC)
+    die("unknown precision in opt_bfgs");
+
+  if (logf != NULL)
+    gettimeofday(&start_time, NULL);
+
+  g = vec_new(n);      /* gradient */
+  xi = vec_new(n);     /* current direction along which to minimize */
+  H = inv_Hessian != NULL ? inv_Hessian : mat_new(n, n);   
+                                /* inverse Hessian */
+  dg = vec_new(n);     /* difference between old and new gradients */
+  hdg = vec_new(n);    /* H * dg */
+  params_new = vec_new(n); /* updated params vector */
+  at_bounds = vec_new(n); /* record of whether each param is
+                                      at a boundary */
+  /* remainder are auxiliary matrices used in update of inverse
+     Hessian */  
+  first_frac = mat_new(n, n);
+  sec_frac = mat_new(n, n);
+  bfgs_term = mat_new(n, n);
+
+#ifdef DEBUG
+  debugf = fopen_name("opt.debug", "w+");
+#endif
+
+  fval = f(params, data);       /* Calculate starting function value
+                                   and gradient, */
+
+  nevals++;
+
+  if (compute_grad != NULL) {
+    compute_grad(g, params, data, lower_bounds, upper_bounds);
+    nevals++;                   /* here assume equiv of one function
+                                   eval -- not necessarily accurate,
+                                   but prob. okay approx. */
+  }
+  else {
+    opt_gradient(g, f, params, data, deriv_method, fval, lower_bounds, 
+                 upper_bounds, deriv_epsilon);
+    nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*params->size;
+  }
+
+  /* test bounds of each parameter and set "at_bounds" appropriately */
+  params_at_bounds = 
+    test_bounds(params, NULL, lower_bounds, upper_bounds, at_bounds, 0);
+
+  /* TODO: report an error if starting parameter actually *out* of bounds */
+
+  /* if appropriate, print header and initial line to log file */
+  if (logf != NULL) {
+    opt_log(logf, 1, 0, params, g, -1, -1);
+    opt_log(logf, 0, fval, params, g, -1, -1);
+  }
+
+  /* initialize inv Hessian and direction */
+  if (inv_Hessian == NULL) mat_set_identity(H);
+  vec_copy(xi, g);
+  vec_scale(xi, -1);
+
+  /* if there are parameters at boundaries, reduce the dimensionality
+     of xi accordingly */
+  if (params_at_bounds) {
+    project_vector(xi, at_bounds);
+    //    changed_dimension = 1;
+  }
+/*   for (i = 0; i < at_bounds->size; i++)  */
+/*     vec_set(at_bounds, i, OPT_NO_BOUND); */
+
+  stpmax = STEP_SCALE * max(vec_norm(params), n);
+
+  for (its = 0; its < ITMAX; its++) { /* main loop */
+    checkInterrupt();
+
+    /* see if any parameters are (newly) at a boundary, and update
+       total number at boundary */
+    /* FIXME: should this be here? */
+    vec_scale(xi, -1);   /* temporary hack */
+    if ((new_at_bounds = test_bounds(params, xi, lower_bounds, upper_bounds, 
+                                     at_bounds, 1)) > 0) {
+      params_at_bounds += new_at_bounds;
+      project_vector(xi, at_bounds); 
+      //      changed_dimension = 1;
+    }
+    vec_scale(xi, -1);
+
+#ifdef DEBUG
+    fprintf(debugf, "BFGS, iteration %d\nParameters at a boundary (prior to linesearch): ", its) ;
+    if (params_at_bounds == 0) fprintf(debugf, "None\n\n");
+    else {
+      for (i = 0; i < at_bounds->size; i++)
+        if (vec_get(at_bounds, i) != OPT_NO_BOUND)
+          fprintf(debugf, "%d ", i);
+      fprintf(debugf, "\n\n");
+    }
+#endif
+
+    /* scale the direction vector such that the update will send no
+       parameter out of bounds */
+    trunc = scale_for_bounds(xi, params, lower_bounds, upper_bounds); 
+
+    /* minimize along xi */
+    opt_lnsrch(params, fval, g, xi, params_new, retval, stpmax, &check, 
+               f, data, &nevals, &lambda, logf); 
+    /* function is evaluated in opt_lnsrch, value is returned in
+       retval.  We'll ignore the value of "check" here (see Press, et
+       al.) */
+    fval_old = fval;
+    fval = *retval;
+
+    /* update line direction and current version of params */
+    vec_copy(xi, params_new);
+    vec_minus_eq(xi, params);
+    minsf = opt_min_sigfig(params, params_new);  /* first grab min
+                                                    stable sig figs */
+    vec_copy(params, params_new);
+
+#ifdef DEBUG
+    /* verify xi has correct dimensionality */
+    for (i = 0; i < params->size; i++)
+      if (!(vec_get(at_bounds, i) == OPT_NO_BOUND ||
+	    vec_get(xi, i) == 0))
+	die("ERROR: opt_bfgs: DEBUG error\n");
+#endif
+
+    /* test for convergence. "test" will be set to max_i
+       abs(xi_i/max(abs(params_i, 1))) -- an adjusted version of the
+       largest absolute value in xi (adjusted for large vals in
+       params).  Convergence is taken to have occurred if "test" is
+       smaller than the threshold TOLX */
+    /* NOTE: here "xi" is the difference between the old and new
+       parameter vectors */
+    test = 0;                   
+    for (i = 0; i < n; i++) {
+      temp = fabs(vec_get(xi, i))/
+        max(fabs(vec_get(params, i)), 1.0);
+      if (temp > test) test = temp;
+    }
+    if (test <= TOLX(precision)) {
+      if (logf != NULL) fprintf(logf, "Convergence via TOLX (%e <= %e)\n",
+				test, TOLX(precision));
+      success = 1;
+      break;
+    }
+
+    /* alternative tests for convergence */
+    /* FIXME: also test for radical truncation due to bounds? */
+    if (lambda > LAMBDA_THRESHOLD && 
+        minsf >= SIGFIG(precision)) {
+      if (logf != NULL) fprintf(logf, "Convergence via sigfigs (%d)\n", minsf);
+      success = 1;
+      break;
+    }
+
+    if (lambda > LAMBDA_THRESHOLD && 
+        fabs((fval_old - fval) / fval) <= DELTA_FUNC(precision)) {
+      if (logf != NULL) fprintf(logf, "Convergence via delta func\n");
+      success = 1;
+      break;
+    }
+
+    /* save the old gradient and obtain the new gradient */
+    /* first update the method for derivatives, if necessary */
+    if (deriv_method == OPT_DERIV_FORWARD && trunc == -1 && lambda == 1)
+      deriv_method = OPT_DERIV_CENTRAL; 
+                                /* this heuristic seems pretty good:
+                                   if we're taking complete Newton
+                                   steps, then we're getting close to
+                                   the minimum, so we'll start to
+                                   obtain more precise (but expensive)
+                                   gradient estimates */
+    else if (deriv_method == OPT_DERIV_CENTRAL && (trunc != -1 || 
+                                                   lambda < 1))
+      deriv_method = OPT_DERIV_FORWARD;
+                                /* we also need to be able to switch
+                                   back, in case we have a lucky
+                                   step early in the search */
+    vec_copy(dg, g);
+    if (compute_grad != NULL) {
+      compute_grad(g, params, data, lower_bounds, upper_bounds);
+      nevals++;
+    }
+    else {
+      opt_gradient(g, f, params, data, deriv_method, fval, lower_bounds, 
+                   upper_bounds, deriv_epsilon);
+      nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*params->size;
+    }
+
+    if (logf != NULL) 
+      opt_log(logf, 0, fval, params, g, trunc, lambda);
+
+#ifdef DEBUG
+    opt_log(debugf, 1, 0, params, g, -1, -1);
+    opt_log(debugf, 0, fval, params, g, trunc, lambda);
+#endif
+
+    /* test for convergence via zero gradient.  here "test" is an
+       adjusted version of the largest absolute value in g (the
+       gradient) */
+    test = 0;                 
+    den = max(*retval, 1.0);
+    for (i = 0; i < n; i++) {
+      temp = fabs(vec_get(g, i)) * 
+        max(fabs(vec_get(params, i)), 1.0) / den;
+      if (temp > test) test = temp;
+    }
+    if (test <= GTOL(precision)) {
+      if (logf != NULL) fprintf(logf, "Convergence via gradiant tolerance (%e < %e)\n", test, GTOL(precision));
+      success = 1;
+      break;
+    }
+
+    /* compute difference of gradients */
+    vec_scale(dg, -1);
+    vec_plus_eq(dg, g);    
+
+    /* see if any parameters are (newly) at a boundary, and update
+       total number at boundary */
+    if ((new_at_bounds = test_bounds(params, g, lower_bounds, upper_bounds, 
+                                     at_bounds, 1)) > 0) {
+      params_at_bounds += new_at_bounds;
+      project_vector(xi, at_bounds); 
+      //      changed_dimension = 1;
+    }
+
+    /* see about relaxing some constraints (enlarging H) */
+    if (params_at_bounds > 0) {
+      double max_grad = 0;      /* maximum gradient component in the
+                                   "right" direction, for parameters
+                                   at the boundary (i.e., suggesting a
+                                   move into the permitted region of
+                                   the parameter space) */
+      int max_idx=0;              /* corresponding index */
+      for (i = 0; i < at_bounds->size; i++) {
+        if (vec_get(at_bounds, i) == OPT_LOWER_BOUND && 
+            -1 * vec_get(g, i) > max_grad) {
+          /*             vec_get(xi, i) > max_grad) { */
+          max_idx = i; 
+          max_grad = -1 * vec_get(g, i);
+          /*           max_grad = vec_get(xi, i); */
+        }
+        else if (vec_get(at_bounds, i) == OPT_UPPER_BOUND && 
+                 vec_get(g, i) > max_grad) {
+          /*                  -1 * vec_get(xi, i) > max_grad) { */
+          max_idx = i; 
+          max_grad = vec_get(g, i);
+          /*           max_grad = -1 * vec_get(xi, i); */
+        }            
+      }
+      /* enlarge in the dimension of max_grad, if its value is
+         sufficiently large */
+      if (max_grad > 0) {       /* FIXME: zero? */
+#ifdef DEBUG
+        fprintf(debugf, "\nParameter %d now free; will be included in update.\n", max_idx);
+#endif
+        mat_set(H, max_idx, max_idx, 1);
+        vec_set(at_bounds, max_idx, OPT_NO_BOUND); 
+        params_at_bounds--;
+	//        changed_dimension = 1;
+      }
+    }
+
+    /* FIXME: make this more efficient, once working! */
+    /*     if (changed_dimension) { */
+    if (params_at_bounds > 0) {
+      /* project H, dg, and xi, according to new representation of
+         bounds */
+      project_matrix(H, at_bounds);
+      project_vector(dg, at_bounds);
+      project_vector(xi, at_bounds); /* necessary? */
+#ifdef DEBUG
+      fprintf(debugf, "Dimensionality changed and params at bounds; re-projecting H, dg, and xi.\n");
+#endif
+    } 
+    /* NOTE: if dimensionality has been *increased* such that there
+       are no params currently at the bounds, then we need not do
+       anything (H already taken care of, dg and xi can remain as
+       they are).  */
+    //    changed_dimension = 0;
+    /*     } */
+
+    /* compute product of current inv Hessian and difference in
+       gradients.  NOTE: if one or more parameters are at a boundary,
+       all of the following computations will take place in the
+       lower-dimensional space, by virtue of H, dg, and xi having been
+       "projected". */
+    mat_vec_mult(hdg, H, dg); 
+
+#ifdef DEBUG
+    fprintf(debugf, "H:\n");
+    mat_print(debugf, H);
+    fprintf(debugf, "g:\n");
+    vec_fprintf(debugf, g, "%f");
+    fprintf(debugf, "xi:\n");
+    vec_fprintf(debugf, xi, "%f");
+    fprintf(debugf, "dg:\n");
+    vec_fprintf(debugf, dg, "%f");
+    fprintf(debugf, "hdg:\n");
+    vec_fprintf(debugf, hdg, "%f");
+#endif 
+
+    /* update the inv Hessian, using equation 10.7.8 (Numerical
+       Recipes in C) */
+
+    /* here xi holds the difference in the param vectors (the "x's"),
+       dg holds the difference in the gradients, and hdg is the vector
+       given by H*dg (where H is the inverse Hessian) */
+
+    fac = vec_inner_prod(dg, xi); /* denom of first fraction */
+    fae = vec_inner_prod(dg, hdg); /* denom of second fraction */
+
+#ifdef DEBUG
+    fprintf(debugf, "fac = %f, fae = %f\n", fac, fae);
+#endif 
+    
+    if (fac > sqrt(EPS * vec_inner_prod(dg, dg) * vec_inner_prod(xi, xi))) { 
+      /* skip update if fac not "sufficiently
+         positive" */
+      Vector *u, *u2;
+
+      /* first compute first and second fractional terms in 10.7.8 */
+      vec_outer_prod(first_frac, xi, xi); 
+      mat_scale(first_frac, 1/fac);
+      vec_outer_prod(sec_frac, hdg, hdg);
+      mat_scale(sec_frac, -1/fae);
+      
+      /* now compute the extra term for BFGS (eqs 10.7.9 and 10.7.10) */
+      u = xi;                   /* rename for clarity; note that it is
+                                   okay now to destroy xi (will soon
+                                   recompute) */
+      vec_scale(u, 1/fac); 
+      u2 = hdg;                 /* similarly, use hdg for second term
+                                   in u */
+      vec_scale(u2, 1/fae);
+      vec_minus_eq(u, u2);
+      vec_outer_prod(bfgs_term, u, u);
+      mat_scale(bfgs_term, fae);
+
+      /* now compute the updated matrix */
+      mat_plus_eq(H, first_frac);
+      mat_plus_eq(H, sec_frac);
+      mat_plus_eq(H, bfgs_term);
+
+#ifdef DEBUG
+/*       check_H(H, at_bounds); */
+#endif
+    }
+    else {
+      if (logf != NULL) fprintf(logf, "WARNING: resetting H!\n");
+      mat_set_identity(H);
+      project_matrix(H, at_bounds);
+    }
+
+
+    /* finally, update the direction vector */
+    mat_vec_mult(xi, H, g);
+    vec_scale(xi, -1);
+
+
+    /* make sure direction of xi is okay; if not, reset H to identity;
+       on second failure of this type, assume convergence */
+    if (vec_inner_prod(g, xi) >= 0) {
+      if (already_failed) {
+	if (logf != NULL) fprintf(logf, "Convergence via inner product (%e) >= 0\n", vec_inner_prod(g, xi));
+        success = 1; 
+        break;
+      }
+      else {
+        if (logf != NULL) fprintf(logf, "WARNING: resetting H! (%s time)\n", 
+                already_failed ? "2nd" : "1st");
+        mat_set_identity(H);
+        project_matrix(H, at_bounds);
+        mat_vec_mult(xi, H, g);
+        vec_scale(xi, -1);
+        already_failed = 1;
+      }
+    }
+  }
+
+  if (logf != NULL) {
+    opt_log(logf, 0, fval, params, g, trunc, lambda); /* final versions */
+    gettimeofday(&end_time, NULL);
+    fprintf(logf, "\nNumber of iterations: %d\nNumber of function evaluations: %d\nTotal time: %.4f sec.\n", 
+            its, nevals, end_time.tv_sec - start_time.tv_sec + 
+            (end_time.tv_usec - start_time.tv_usec)/1.0e6);
+  }
+
+  vec_free(dg);
+  vec_free(g);
+  vec_free(hdg);
+  vec_free(params_new);
+  vec_free(xi);
+  vec_free(at_bounds);
+  if (inv_Hessian == NULL) mat_free(H);
+  mat_free(first_frac);
+  mat_free(sec_frac);
+  mat_free(bfgs_term);
+  if (num_evals != NULL)
+    *num_evals = nevals;
+
+  if (success == 0) {
+    if (logf != NULL)
+      fprintf(logf, 
+              "WARNING: exceeded maximum number of iterations in opt_bfgs.\n");
+    return 1;
+  }
+  
+  return 0;    
+}
+
+
+/* Extension of opt_bfgs to allow for linear predictors of rate parameters. */
+int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
              void *data, double *retval, Vector *lower_bounds,
              Vector *upper_bounds, FILE *logf,
              void (*compute_grad)(Vector *grad, Vector *params,
