@@ -107,7 +107,7 @@ opt_precision_type get_precision(const char *prec) {
 
 void get_beta_params_direction(Matrix *Hinv, void *data, Vector *at_bounds, int params_at_bounds,
                                Vector *g, Vector *params_new, Vector *beta_direction, 
-                               Vector *beta_params, double lambda);
+                               Vector *beta_params, double lambda, double lasso_penalty);
 void update_params(Vector *params_new, Vector *beta_params, void *data);
 
 
@@ -826,7 +826,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
                                   void *data, Vector *lb, Vector *ub),
              opt_precision_type precision, Matrix *inv_Hessian,
 	     int *num_evals, double (*freg)(Vector*, void*),
-             Vector *beta_params) {
+                        Vector *beta_params, double lasso_penalty) {
   
   int check, i, its, n = params->size, success = 0, nevals = 0, 
     params_at_bounds = 0, new_at_bounds, //changed_dimension = 0,
@@ -966,11 +966,11 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
 
     if (do_inner_opt) {
       get_beta_params_direction(H, data, at_bounds, params_at_bounds, g,
-                                params_new, beta_direction, beta_params, lambda);
-      opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
+                                params_new, beta_direction, beta_params, lambda, lasso_penalty);
+      /*opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
                    lower_bounds, upper_bounds, deriv_epsilon);
-      nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*beta_params->size;
-      if (did_inner_opt) { /* likleihood from last iteration will be comparable */
+                   nevals += (deriv_method == OPT_DERIV_CENTRAL ? 2 : 1)*beta_params->size;*/
+      if (0*did_inner_opt) { /* likleihood from last iteration will be comparable */
         opt_lnsrch(beta_params, fval, greg, beta_direction, beta_params_new, retval, stpmax,
                  &check, freg, data, &nevals, &lambda, logf);
       } else { /* this will initialize this inner optimization */

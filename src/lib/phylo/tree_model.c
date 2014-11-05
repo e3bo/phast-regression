@@ -177,6 +177,7 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   fclose(designMat);
   tm->eta_coefficients = vec_new(ncoef);
   vec_set_all(tm->eta_coefficients, 0.1);
+  tm->lasso_penalty = 0;
 
   return tm;
 }
@@ -2039,7 +2040,7 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
   }
   retval = opt_bfgs_regression(tm_likelihood_wrapper, opt_params, (void*)mod, &ll, 
                     lower_bounds, upper_bounds, logf, NULL, precision, 
-		    NULL, &numeval, tm_regression_likelihood_wrapper, beta_params);
+                               NULL, &numeval, tm_regression_likelihood_wrapper, beta_params, mod->lasso_penalty);
   mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
                                    natural log scale */
   if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
@@ -2782,7 +2783,7 @@ void update_params(Vector *params_new, Vector *beta_params, void *data){
 /* Find best regression coefficients based on quadratic approximation here */
 int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int params_at_bounds,
                               Vector *g, Vector *params_new, Vector *beta_direction, 
-                              Vector *beta_params, double lambda){
+                              Vector *beta_params, double lambda, double lasso_penalty){
 
   TreeModel *mod; 
   Vector *beta, *eta, *beta_no_k, *r, *beta_gradient, *beta_hess_diag, *beta_full_step;
@@ -2840,7 +2841,18 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
         a += wij*xi*xj;
       }
     }
-    beta_k_full_step = -b/(2*a);  
+    beta_k_full_step = -b/(2*a);
+    if (k > 0) {
+      if (fabs(beta_k_full_step) <= lasso_penalty) {
+        beta_k_full_step = 0;
+      } else {
+        if (beta_k_full_step > 0){
+          beta_k_full_step -= lasso_penalty;
+        } else {
+          beta_k_full_step += lasso_penalty;
+        }
+      }
+    }
     beta_k_deriv = 2*a*vec_get(beta, k) + b;
     beta_k_deriv2 = 2*a;
     vec_set(beta_full_step, k, beta_k_full_step);

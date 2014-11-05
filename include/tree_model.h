@@ -220,7 +220,8 @@ struct tm_struct {
 				 if TM_SCALE and alt_subst_mods!=NULL */
   int **iupac_inv_map;          /**< Inverse map for IUPAC ambiguity characters */
   Vector *eta_coefficients;     /* Regression coefficients for linear predictor of transition rates */
-  Matrix *eta_design_matrix;    /* Design matrix for linear predictor of transistion rates */    
+  Matrix *eta_design_matrix;    /* Design matrix for linear predictor of transistion rates */
+  double lasso_penalty;          /* L_1 penalty for the regression */
 };
 
 typedef struct tm_struct TreeModel;
