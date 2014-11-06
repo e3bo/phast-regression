@@ -60,7 +60,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
                                   void *data, Vector *lb, Vector *ub),
              opt_precision_type precision, Matrix *inv_Hessian,
 	     int *num_evals, double (*freg)(Vector*, void*),
-                        Vector *beta_params, double lasso_penalty, int do_inner_opt);
+                        Vector *beta_params, int npenalties);
 
 void opt_lnsrch(Vector *xold, double fold, Vector *g, Vector *p, 
                 Vector *x, double *f, double stpmax, 

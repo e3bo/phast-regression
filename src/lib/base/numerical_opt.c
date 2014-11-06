@@ -518,6 +518,7 @@ int opt_bfgs(double (*f)(Vector*, void*), Vector *params,
     fval = *retval;
 
     /* update line direction and current version of params */
+
     vec_copy(xi, params_new);
     vec_minus_eq(xi, params);
     minsf = opt_min_sigfig(params, params_new);  /* first grab min
@@ -826,11 +827,11 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
                                   void *data, Vector *lb, Vector *ub),
              opt_precision_type precision, Matrix *inv_Hessian,
 	     int *num_evals, double (*freg)(Vector*, void*),
-                        Vector *beta_params, double lasso_penalty, int do_inner_opt) {
+             Vector *beta_params, int npenalties) {
   
   int check, i, its, n = params->size, success = 0, nevals = 0, 
     params_at_bounds = 0, new_at_bounds, //changed_dimension = 0,
-    trunc, already_failed = 0, minsf;
+    trunc, already_failed = 0, minsf, penalty_index, do_inner_opt=0;
   double den, fac, fae, fval, stpmax, temp, test, lambda, fval_old,
     deriv_epsilon = DERIV_EPSILON;
   Vector *dg, *g, *hdg, *params_new, *xi, *at_bounds;
@@ -838,8 +839,9 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
   opt_deriv_method deriv_method = OPT_DERIV_FORWARD;
   struct timeval start_time, end_time;
 
-  int nreg = beta_params->size, did_inner_opt=0;
-  Vector *greg, *beta_direction, *beta_params_new;
+  int nreg = beta_params->size, did_inner_opt=0, find_hi_penalty=1;
+  Vector *greg, *beta_direction, *beta_params_new, *xi_last;
+  double lasso_penalty, hi_penalty, lo_penalty = 1e-4;
   update_params(params, beta_params, data);
 
 
@@ -848,6 +850,8 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
   greg = vec_new(nreg);
   beta_direction = vec_new(nreg);
   beta_params_new = vec_new(nreg);
+  xi_last = vec_new(n);     
+
 
   if (precision == OPT_UNKNOWN_PREC)
     die("unknown precision in opt_bfgs");
@@ -917,9 +921,13 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
 /*   for (i = 0; i < at_bounds->size; i++)  */
 /*     vec_set(at_bounds, i, OPT_NO_BOUND); */
 
+  hi_penalty = 0.25;
   stpmax = STEP_SCALE * max(vec_norm(params), n);
-
-  for (its = 0; its < ITMAX; its++) { /* main loop */
+  for (penalty_index = 0; penalty_index < npenalties; penalty_index++){
+    lasso_penalty = lo_penalty;
+    double tmp = (double) penalty_index/(npenalties - 1);
+    lasso_penalty += (hi_penalty - lo_penalty) * (1 - tmp);
+    for (its = 0; its < ITMAX; its++) { /* main loop */
     checkInterrupt();
     
     /* see if any parameters are (newly) at a boundary, and update
@@ -1000,6 +1008,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
     fval = *retval;
 
     /* update line direction and current version of params */
+    vec_copy(xi_last, xi);
     vec_copy(xi, params_new);
     vec_minus_eq(xi, params);
     minsf = opt_min_sigfig(params, params_new);  /* first grab min
@@ -1032,6 +1041,8 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
 				test, TOLX(precision));
       if (did_inner_opt==1){
         success = 1;
+        vec_copy(xi, xi_last);
+        do_inner_opt= did_inner_opt = 0;
         break;
       } else {
         do_inner_opt=1;
@@ -1045,6 +1056,8 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
       if (logf != NULL) fprintf(logf, "Convergence via sigfigs (%d)\n", minsf);
       if (did_inner_opt==1){
         success = 1;
+        vec_copy(xi, xi_last);
+        do_inner_opt = did_inner_opt = 0;
         break;
       } else {
         do_inner_opt=1;
@@ -1056,6 +1069,8 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
       if (logf != NULL) fprintf(logf, "Convergence via delta func\n");
       if (did_inner_opt==1){
         success = 1;
+        vec_copy(xi, xi_last);
+        do_inner_opt = did_inner_opt = 0;
         break;
       } else {
         do_inner_opt=1;
@@ -1111,6 +1126,8 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
       if (logf != NULL) fprintf(logf, "Convergence via gradiant tolerance (%e < %e)\n", test, GTOL(precision));
       if (did_inner_opt==1){
         success = 1;
+        vec_copy(xi, xi_last);
+        do_inner_opt= did_inner_opt = 0;
         break;
       } else {
         do_inner_opt=1;
@@ -1252,7 +1269,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
 /*       check_H(H, at_bounds); */
 #endif
     }
-    else {
+    else if(0){
       if (logf != NULL) fprintf(logf, "WARNING: resetting H!\n");
       mat_set_identity(H);
       project_matrix(H, at_bounds);
@@ -1270,6 +1287,8 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
       if (already_failed) {
 	if (logf != NULL) fprintf(logf, "Convergence via inner product (%e) >= 0\n", vec_inner_prod(g, xi));
         success = 1; 
+        vec_copy(xi, xi_last);
+        do_inner_opt = did_inner_opt =0;
         break;
       }
       else {
@@ -1282,6 +1301,8 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
         already_failed = 1;
       }
     }
+  }
+    fprintf(stderr, "penalty=%g, beta_vec=", lasso_penalty); vec_print(beta_params,stderr);
   }
 
   if (logf != NULL) {
@@ -1297,6 +1318,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
   vec_free(hdg);
   vec_free(params_new);
   vec_free(xi);
+  vec_free(xi_last);
   vec_free(at_bounds);
   if (inv_Hessian == NULL) mat_free(H);
   mat_free(first_frac);

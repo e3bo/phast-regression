@@ -221,8 +221,6 @@ struct tm_struct {
   int **iupac_inv_map;          /**< Inverse map for IUPAC ambiguity characters */
   Vector *eta_coefficients;     /* Regression coefficients for linear predictor of transition rates */
   Matrix *eta_design_matrix;    /* Design matrix for linear predictor of transistion rates */
-  double lasso_penalty_hi;          /* L_1 penalty for the regression */
-  double lasso_penalty_lo;
   double npenalties;
 };
 
