@@ -826,7 +826,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
                                   void *data, Vector *lb, Vector *ub),
              opt_precision_type precision, Matrix *inv_Hessian,
 	     int *num_evals, double (*freg)(Vector*, void*),
-                        Vector *beta_params, double lasso_penalty) {
+                        Vector *beta_params, double lasso_penalty, int do_inner_opt) {
   
   int check, i, its, n = params->size, success = 0, nevals = 0, 
     params_at_bounds = 0, new_at_bounds, //changed_dimension = 0,
@@ -838,7 +838,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
   opt_deriv_method deriv_method = OPT_DERIV_FORWARD;
   struct timeval start_time, end_time;
 
-  int nreg = beta_params->size, do_inner_opt = 0, did_inner_opt=0;
+  int nreg = beta_params->size, did_inner_opt=0;
   Vector *greg, *beta_direction, *beta_params_new;
   update_params(params, beta_params, data);
 

@@ -177,8 +177,9 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   fclose(designMat);
   tm->eta_coefficients = vec_new(ncoef);
   vec_set_all(tm->eta_coefficients, 0.1);
-  tm->lasso_penalty = 0;
-
+  tm->lasso_penalty_hi = 1;
+  tm->lasso_penalty_lo = 0;
+  tm->npenalties = 3;
   return tm;
 }
 
@@ -2038,16 +2039,24 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
     fprintf(stderr, "design matrix: \n"); 
     mat_print(mod->eta_design_matrix, stderr);
   }
-  retval = opt_bfgs_regression(tm_likelihood_wrapper, opt_params, (void*)mod, &ll, 
-                    lower_bounds, upper_bounds, logf, NULL, precision, 
-                               NULL, &numeval, tm_regression_likelihood_wrapper, beta_params, mod->lasso_penalty);
-  mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
+  double penalty;
+  int do_inner_opt = 0;
+  for (i = 0; i < mod->npenalties; i++){
+    penalty = 1 - (double) i / mod->npenalties;
+    penalty = mod->lasso_penalty_lo + penalty * mod->lasso_penalty_hi;
+    if (i > 0) do_inner_opt = 1;
+    retval = opt_bfgs_regression(tm_likelihood_wrapper, opt_params, (void*)mod, &ll,
+                                 lower_bounds, upper_bounds, logf, NULL, precision,
+                                 NULL, &numeval, tm_regression_likelihood_wrapper, 
+                                 beta_params, penalty, do_inner_opt);
+    mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
                                    natural log scale */
-  if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
-  tm_unpack_params(mod, opt_params, -1);
-  vec_copy(mod->eta_coefficients, beta_params);
-
-  vec_copy(params, mod->all_params);
+    if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
+    fprintf(stderr, "** penalty = %g, beta = ", penalty); vec_print(beta_params, stderr);
+    tm_unpack_params(mod, opt_params, -1);
+    vec_copy(mod->eta_coefficients, beta_params);
+    vec_copy(params, mod->all_params);
+  }
   vec_free(opt_params);
   vec_free(beta_params);
 
