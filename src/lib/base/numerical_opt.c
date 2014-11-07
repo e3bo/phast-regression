@@ -963,15 +963,16 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
 /*   for (i = 0; i < at_bounds->size; i++)  */
 /*     vec_set(at_bounds, i, OPT_NO_BOUND); */
 
-  hi_penalty = 20000;
-  lo_penalty = 2000;
-  npenalties = 2;
+  hi_penalty = 12;
+  lo_penalty = -4;
+  npenalties = 10;
 
   stpmax = STEP_SCALE * max(vec_norm(params), n);
   for (penalty_index = 0; penalty_index < npenalties; penalty_index++){
     lasso_penalty = lo_penalty;
     double tmp = (double) penalty_index/(npenalties - 1);
     lasso_penalty += (hi_penalty - lo_penalty) * (1 - tmp);
+    lasso_penalty = exp(lasso_penalty);
     for (its = 0; its < ITMAX; its++) { /* main loop */
     checkInterrupt();
     
