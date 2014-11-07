@@ -110,6 +110,46 @@ void get_beta_params_direction(Matrix *Hinv, void *data, Vector *at_bounds, int 
                                Vector *beta_params, double lambda, double lasso_penalty);
 void update_params(Vector *params_new, Vector *beta_params, void *data);
 
+/* Numerically compute the hessian for the specified function at the
+   specified parameter values.  Matrix "B" must already be
+   allocated. */
+void opt_hess(Matrix *B, double (*f)(Vector*, void*), Vector *params, void* data, 
+              opt_deriv_method method, double reference_val, Vector *lower_bounds, 
+              Vector *upper_bounds, double deriv_epsilon){
+  int i, j;
+  double delta = 2 * deriv_epsilon, tmp;
+  Vector *dpar, *df1, *df2;
+
+  dpar = vec_new(params->size);
+  df1 = vec_new(params->size);
+  df2 = vec_new(params->size);
+  vec_copy(dpar, params);  
+
+  for (i = 0; i < params->size; i++){
+    tmp = vec_get(dpar, i);
+    vec_set(dpar, i, tmp + deriv_epsilon);
+    opt_gradient(df1, f, params, data, method, reference_val, lower_bounds, upper_bounds, deriv_epsilon);
+    vec_set(dpar, i, tmp - deriv_epsilon);
+    opt_gradient(df1, f, params, data, method, reference_val, lower_bounds, upper_bounds, deriv_epsilon);
+    for (j = 0; j < params->size; j++){
+      tmp = (vec_get(df1, j) - vec_get(df2, j)) / delta;
+      mat_set(B, i, j, tmp);
+    }
+    tmp = vec_get(params, i);
+    vec_set(dpar, i, tmp);
+  }
+  for (i = 0; i < params->size; i++){
+    for (j = 0; j < i; j++){
+      tmp = 0.5 * (mat_get(B, i, j) + mat_get(B, j, i));
+      mat_set(B, i, j, tmp);
+      mat_set(B, j, i, tmp);
+    }
+  }
+  vec_free(dpar);
+  vec_free(df1);
+  vec_free(df2);
+} 
+
 
 /* Numerically compute the gradient for the specified function at the
    specified parameter values.  Vector "grad" must already be
@@ -840,6 +880,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
   struct timeval start_time, end_time;
 
   int nreg = beta_params->size, did_inner_opt=0, find_hi_penalty=1;
+  Matrix *B;
   Vector *greg, *beta_direction, *beta_params_new, *xi_last;
   double lasso_penalty, hi_penalty, lo_penalty = 1e-4;
   update_params(params, beta_params, data);
@@ -851,6 +892,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
   beta_direction = vec_new(nreg);
   beta_params_new = vec_new(nreg);
   xi_last = vec_new(n);     
+  B = mat_new(n, n);
 
 
   if (precision == OPT_UNKNOWN_PREC)
@@ -922,6 +964,8 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
 /*     vec_set(at_bounds, i, OPT_NO_BOUND); */
 
   hi_penalty = 0.25;
+  lo_penalty = 0.21;
+
   stpmax = STEP_SCALE * max(vec_norm(params), n);
   for (penalty_index = 0; penalty_index < npenalties; penalty_index++){
     lasso_penalty = lo_penalty;
@@ -973,6 +1017,12 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
     printf("%g\n", vec_inner_prod(xi, g));*/
 
     if (do_inner_opt) {
+      
+      /*opt_hess(B, f, params, data, deriv_method, fval, lower_bounds, 
+                   upper_bounds, deriv_epsilon);
+      printf("numerical hessian:\n"); mat_print(B, stdout);
+      printf("\n");*/
+
       get_beta_params_direction(H, data, at_bounds, params_at_bounds, g,
                                 params_new, beta_direction, beta_params, lambda, lasso_penalty);
       /*opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
@@ -986,10 +1036,6 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
         vec_copy(beta_params_new, beta_params);
         vec_plus_eq(beta_params_new, beta_direction);
       }     
-      printf("beta direction: ");
-      vec_print(beta_direction, stdout);
-      printf("beta gradient: ");
-      vec_print(greg, stdout);
       printf("beta_params: ");
       vec_print(beta_params, stdout);
       printf("beta params new: ");
@@ -1042,7 +1088,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
       if (did_inner_opt==1){
         success = 1;
         vec_copy(xi, xi_last);
-        do_inner_opt= did_inner_opt = 0;
+        did_inner_opt = 0;
         break;
       } else {
         do_inner_opt=1;
@@ -1057,7 +1103,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
       if (did_inner_opt==1){
         success = 1;
         vec_copy(xi, xi_last);
-        do_inner_opt = did_inner_opt = 0;
+        did_inner_opt = 0;
         break;
       } else {
         do_inner_opt=1;
@@ -1070,7 +1116,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
       if (did_inner_opt==1){
         success = 1;
         vec_copy(xi, xi_last);
-        do_inner_opt = did_inner_opt = 0;
+        did_inner_opt = 0;
         break;
       } else {
         do_inner_opt=1;
@@ -1127,7 +1173,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
       if (did_inner_opt==1){
         success = 1;
         vec_copy(xi, xi_last);
-        do_inner_opt= did_inner_opt = 0;
+        did_inner_opt = 0;
         break;
       } else {
         do_inner_opt=1;
@@ -1288,7 +1334,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
 	if (logf != NULL) fprintf(logf, "Convergence via inner product (%e) >= 0\n", vec_inner_prod(g, xi));
         success = 1; 
         vec_copy(xi, xi_last);
-        do_inner_opt = did_inner_opt =0;
+        did_inner_opt =0;
         break;
       }
       else {
@@ -1324,6 +1370,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
   mat_free(first_frac);
   mat_free(sec_frac);
   mat_free(bfgs_term);
+  mat_free(B);
   if (num_evals != NULL)
     *num_evals = nevals;
 

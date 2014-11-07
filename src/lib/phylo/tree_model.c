@@ -177,7 +177,7 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   fclose(designMat);
   tm->eta_coefficients = vec_new(ncoef);
   vec_set_all(tm->eta_coefficients, 0.1);
-  tm->npenalties = 6;
+  tm->npenalties = 4;
   return tm;
 }
 
@@ -2785,11 +2785,11 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
                               Vector *beta_params, double lambda, double lasso_penalty){
 
   TreeModel *mod; 
-  Vector *beta, *eta, *beta_no_k, *r, *beta_gradient, *beta_hess_diag, *beta_full_step;
+  Vector *beta, *eta, *beta_no_k, *r, *beta_gradient, *beta_hess_diag, *beta_cur, *beta_old;
   Matrix *X, *Binv_proj, *Bproj, *B, *W; 
   int sz, i, j, k;
-  double a, b, zi, zj, xi, xj, wij;
-  double beta_k_full_step, beta_k_deriv, beta_k_deriv2;
+  double a, b, zi, zj, xi, xj, wij, temp, test;
+  double beta_cur_k, beta_k_deriv, beta_k_deriv2;
 
   mod = (TreeModel*)data;
   beta = beta_params;
@@ -2815,55 +2815,71 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   mat_print(W, stdout);
   printf("\n");*/
 
-  beta_full_step = vec_new(beta->size);
+  beta_cur = vec_new(beta->size);
   beta_gradient = vec_new(beta->size);
   beta_hess_diag = vec_new(beta->size);  
   beta_no_k = vec_new(beta->size);
   r = vec_new(B->nrows);
-  for(k = 0; k < beta->size; k++){
-    vec_copy(beta_no_k, beta);
-    vec_set(beta_no_k, k, 0);
-    mat_vec_mult(eta, X, beta_no_k);
-    vec_copy(r, params_new);
-    vec_minus_eq(r, eta);  
+  beta_old = vec_new(beta->size);
 
-    a = b = 0;
-    for(i = 0; i < B->nrows; i++){
-      for(j = 0; j < B->nrows; j++) {
-        /*zj = log(vec_get(params_new, j));
-        zi = log(vec_get(params_new, i));*/
-        zj = vec_get(r, j);
-        zi = vec_get(r, i);
-        xi = mat_get(X, i, k);
-        xj = mat_get(X, j, k);
-        wij = mat_get(W, i, j);
-        b -= wij * (xi*zj + xj*zi);
-        a += wij*xi*xj;
+  vec_copy(beta_cur, beta);
+  do {
+    for(k = 0; k < beta->size; k++){
+      vec_copy(beta_old, beta_cur);
+      vec_copy(beta_no_k, beta_cur);
+      vec_set(beta_no_k, k, 0);
+      mat_vec_mult(eta, X, beta_no_k);
+      vec_copy(r, params_new);
+      vec_minus_eq(r, eta);
+      /*printf("resids for var %d: ", k); vec_print(r, stdout);*/
+      a = b = 0;
+      for(i = 0; i < B->nrows; i++){
+        j = i;
+        /*for(j = 0; j < B->nrows; j++) {*/
+          /*zj = log(vec_get(params_new, j));
+          zi = log(vec_get(params_new, i));*/
+          zj = vec_get(r, j);
+          zi = vec_get(r, i);
+          xi = mat_get(X, i, k);
+          xj = mat_get(X, j, k);
+          wij = mat_get(W, i, j);
+          b -= wij * (xi*zj + xj*zi);
+          a += wij*xi*xj;
+          /*printf("  i=%d, j=%d, a=%g, b=%g, xi=%g, xj=%g, zi=%g, zj=%g, wij=%g\n", i, j, a, b, xi, xj, zi, zj, wij); */
+          /*}*/
       }
-    }
-    beta_k_full_step = -b/(2*a);
-    if (k > 0) {
-      if (fabs(beta_k_full_step) <= lasso_penalty) {
-        beta_k_full_step = 0;
-      } else {
-        if (beta_k_full_step > 0){
-          beta_k_full_step -= lasso_penalty;
+      beta_cur_k = -b/(2*a);
+      if (k > 0) {
+        if (fabs(beta_cur_k) <= lasso_penalty) {
+          beta_cur_k = 0;
         } else {
-          beta_k_full_step += lasso_penalty;
+          if (beta_cur_k > 0){
+            beta_cur_k -= lasso_penalty;
+          } else {
+            beta_cur_k += lasso_penalty;
+          }
         }
       }
+      beta_k_deriv = 2*a*vec_get(beta_old, k) + b;
+      beta_k_deriv2 = 2*a;
+      vec_set(beta_cur, k, beta_cur_k);
+      vec_set(beta_gradient, k, beta_k_deriv);
+      vec_set(beta_hess_diag, k, beta_k_deriv2);
     }
-    beta_k_deriv = 2*a*vec_get(beta, k) + b;
-    beta_k_deriv2 = 2*a;
-    vec_set(beta_full_step, k, beta_k_full_step);
-    vec_set(beta_gradient, k, beta_k_deriv);
-    vec_set(beta_hess_diag, k, beta_k_deriv2);
-  }
-  vec_copy(beta_direction, beta_full_step);
+    test = 0;
+    vec_copy(beta_direction, beta_cur);
+    vec_minus_eq(beta_direction, beta_old);
+    for (i = 0; i < beta->size; i++) {
+      temp = fabs(vec_get(beta_direction, i))/max(fabs(vec_get(beta_old, i)), 1.0);
+      if (temp > test) test = temp;
+    }
+  } while (test > 1e-8);
+
+  vec_copy(beta_direction, beta_cur);
   vec_minus_eq(beta_direction, beta);
 
   printf("beta: "); vec_print(beta, stdout);
-  printf("beta_full_step: "); vec_print(beta_full_step, stdout);
+  printf("beta_cur: "); vec_print(beta_cur, stdout);
   printf("beta_direction: "); vec_print(beta_direction, stdout);
   printf("beta_gradient: "); vec_print(beta_gradient, stdout);
   printf("beta_hess_diag: "); vec_print(beta_hess_diag, stdout);
@@ -2871,7 +2887,8 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
   vec_free(r);
   vec_free(beta_no_k);
   vec_free(eta);
-  vec_free(beta_full_step);
+  vec_free(beta_cur);
+  vec_free(beta_old);
   vec_free(beta_gradient);
   vec_free(beta_hess_diag);
   mat_free(Bproj);
