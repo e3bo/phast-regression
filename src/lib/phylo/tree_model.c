@@ -2784,13 +2784,14 @@ void update_params(Vector *params_new, Vector *beta_params, void *data){
 /* Find best regression coefficients based on quadratic approximation here */
 int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int params_at_bounds,
                               Vector *g, Vector *params_new, Vector *beta_direction, 
-                              Vector *beta_params, double lambda, double lasso_penalty){
+                              Vector *beta_params, double lambda, double *lasso_penalty,
+                              int find_hi_penalty){
 
   TreeModel *mod; 
   Vector *beta, *eta, *beta_no_k, *r, *beta_gradient, *beta_hess_diag, *beta_cur, *beta_old;
   Matrix *X, *Binv_proj, *Bproj, *B, *W; 
   int sz, i, j, k;
-  double a, b, zi, zj, xi, xj, wij, temp, test;
+  double a, b, zi, zj, xi, xj, wij, temp, test, eps=1e-8;
   double beta_cur_k, beta_k_deriv, beta_k_deriv2;
 
   mod = (TreeModel*)data;
@@ -2850,13 +2851,16 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
         }
       }
       if (k > 0) {
-        if (fabs(b) <= lasso_penalty) {
+        if (fabs(b) <= *lasso_penalty) {
+          beta_cur_k = 0;
+        } else if (find_hi_penalty){
+          *lasso_penalty = fabs(b) + eps;
           beta_cur_k = 0;
         } else {
           if (-b > 0){
-            beta_cur_k = (-b - lasso_penalty)/(2*a);
+            beta_cur_k = (-b - *lasso_penalty)/(2*a);
           } else {
-            beta_cur_k = (-b + lasso_penalty)/(2*a);
+            beta_cur_k = (-b + *lasso_penalty)/(2*a);
           }
         }
       } else {
@@ -2884,7 +2888,7 @@ int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int p
       temp = fabs(vec_get(beta_direction, i))/max(fabs(vec_get(beta_old, i)), 1.0);
       if (temp > test) test = temp;
     }
-  } while (test > 1e-8);
+  } while (test > eps);
 
   vec_copy(beta_direction, beta_cur);
   vec_minus_eq(beta_direction, beta);

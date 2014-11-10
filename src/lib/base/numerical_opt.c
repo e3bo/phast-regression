@@ -875,6 +875,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
     trunc, already_failed = 0, minsf, penalty_index, do_inner_opt=0;
   double den, fac, fae, fval, stpmax, temp, test, lambda, fval_old,
     deriv_epsilon = DERIV_EPSILON;
+
   Vector *dg, *g, *hdg, *params_new, *xi, *at_bounds;
   Matrix *H, *first_frac, *sec_frac, *bfgs_term;
   opt_deriv_method deriv_method = OPT_DERIV_FORWARD;
@@ -883,7 +884,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
   int nreg = beta_params->size, did_inner_opt=0, find_hi_penalty=1;
   Matrix *B;
   Vector *greg, *beta_direction, *beta_params_new, *xi_old, *beta_params_old, *params_old;
-  double lasso_penalty, hi_penalty, lo_penalty = 1e-4, tmp;
+  double lasso_penalty, hi_penalty, lo_penalty, tmp, penalty_ratio = 0.0001;
   update_params(params, beta_params, data);
 
 
@@ -964,8 +965,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
 /*   for (i = 0; i < at_bounds->size; i++)  */
 /*     vec_set(at_bounds, i, OPT_NO_BOUND); */
 
-  hi_penalty = 12;
-  lo_penalty = -7;
+
   npenalties = 100;
 
   stpmax = STEP_SCALE * max(vec_norm(params), n);
@@ -1035,6 +1035,7 @@ int opt_bfgs_regression(double (*f)(Vector*, void*), Vector *params,
                                 params_new, beta_direction, beta_params, lambda, &lasso_penalty, find_hi_penalty);
       if (find_hi_penalty) {
         hi_penalty = log(lasso_penalty);
+        lo_penalty = hi_penalty + log(penalty_ratio);
       }
       opt_gradient(greg, freg, beta_params, data, deriv_method, fval,
                    lower_bounds, upper_bounds, deriv_epsilon);
