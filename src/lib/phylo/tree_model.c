@@ -2782,7 +2782,7 @@ void update_params(Vector *params_new, Vector *beta_params, void *data){
 }
 
 /* Find best regression coefficients based on quadratic approximation here */
-int get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int params_at_bounds,
+void get_beta_params_direction(Matrix *Binv, void *data, Vector *at_bounds, int params_at_bounds,
                               Vector *g, Vector *params_new, Vector *beta_direction, 
                               Vector *beta_params, double lambda, double *lasso_penalty,
                               int find_hi_penalty){
