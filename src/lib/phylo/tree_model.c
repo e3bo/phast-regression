@@ -2093,6 +2093,135 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
   return retval;
 }
 
+int tm_setup(TreeModel *mod, MSA *msa, Vector *params, int cat, 
+           opt_precision_type precision, FILE *logf, int quiet,
+	   FILE *error_file) {
+  double ll;
+  Vector *lower_bounds, *upper_bounds, *opt_params, *beta_params;
+  int i, retval = 0, npar, numeval;
+
+  if (msa->ss == NULL) {
+    if (msa->seqs == NULL)
+      die("ERROR tm_fit: msa->ss and msa->seqs are both NULL\n");
+    ss_from_msas(msa, mod->order+1, 0, NULL, NULL, NULL, -1, 
+		 subst_mod_is_codon_model(mod->subst_mod));
+  }
+
+  if (mod->backgd_freqs == NULL)  {
+    tm_init_backgd(mod, msa, cat);
+    for (i=0; i<mod->backgd_freqs->size; i++)
+      vec_set(params, mod->backgd_idx+i, vec_get(mod->backgd_freqs, i));
+  }
+  if (mod->alt_subst_mods != NULL) {
+    AltSubstMod *altmod;
+    for (i=0; i < lst_size(mod->alt_subst_mods); i++) {
+      altmod = lst_get_ptr(mod->alt_subst_mods, i);
+      if (altmod->rate_matrix == NULL)
+	altmod->rate_matrix = mm_create_copy(mod->rate_matrix);
+      if (altmod->separate_backgd && altmod->backgd_freqs == NULL)
+	altmod->backgd_freqs = vec_create_copy(mod->backgd_freqs);
+    }
+  }
+
+  if (mod->tree == NULL) {      /* weight matrix */
+    mod->lnL = tl_compute_log_likelihood(mod, msa, NULL, NULL, cat, NULL) * 
+      log(2);
+    return 0;
+  }
+
+  mod->msa = msa;               /* package with mod any data needed to
+                                   compute likelihoods */
+  mod->category = cat;
+
+  npar=0;
+  for (i=0; i<params->size; i++) {
+    vec_set(mod->all_params, i, vec_get(params, i));
+    if (mod->param_map[i] >= npar)
+      npar = mod->param_map[i]+1;
+  }
+  if (npar <= 0)
+    die("ERROR tm_fit npar=%i.  Nothing to optimize!\n", npar);
+  opt_params = vec_new(npar);
+  for (i=0; i<params->size; i++)
+    if (mod->param_map[i] >=0)
+      vec_set(opt_params, mod->param_map[i], vec_get(params, i));
+  
+  tm_new_boundaries(&lower_bounds, &upper_bounds, npar, mod, 0);
+  tm_check_boundaries(opt_params, lower_bounds, upper_bounds);
+  if (mod->estimate_branchlens == TM_BRANCHLENS_NONE ||
+      mod->alt_subst_mods != NULL ||
+      mod->selection_idx >= 0)
+    mod->scale_during_opt = 1;
+  if (mod->estimate_branchlens == TM_BRANCHLENS_ALL) {
+    for (i=0; i < mod->tree->nnodes; i++) {
+      TreeNode *n = lst_get_ptr(mod->tree->nodes, i);
+      if (n != mod->tree && n->hold_constant)
+	mod->scale_during_opt = 1;
+    }
+  }
+
+  beta_params = vec_new(mod->eta_coefficients->size);
+  vec_copy(beta_params, mod->eta_coefficients);
+  if (!quiet) fprintf(stderr, "numpar = %i\n", opt_params->size);
+  if (!quiet) fprintf(stderr, "numbetapar = %i\n", beta_params->size);
+  if (!quiet) {
+    fprintf(stderr, "design matrix: \n"); 
+    mat_print(mod->eta_design_matrix, stderr);
+  }
+  retval = opt_bfgs_regression(tm_likelihood_wrapper, opt_params, (void*)mod, &ll,
+                               lower_bounds, upper_bounds, logf, NULL, precision,
+                               NULL, &numeval, tm_regression_likelihood_wrapper, 
+                               beta_params, mod->npenalties);
+  mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
+                                 natural log scale */
+  if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
+  tm_unpack_params(mod, opt_params, -1);
+  vec_copy(mod->eta_coefficients, beta_params);
+  vec_copy(params, mod->all_params);
+  vec_free(opt_params);
+  vec_free(beta_params);
+
+  if (error_file != NULL)
+    tm_variance(error_file, mod, msa, mod->all_params, cat);
+
+  if (mod->scale_during_opt == 0 && 
+      mod->subst_mod != JC69 && mod->subst_mod != F81)
+                                /* in this case, need to scale final
+                                   model (JC69 and F81 are exceptions,
+                                   because probability subst. matrices
+                                   are not derived from the rate
+                                   matrix) */
+    tm_scale_model(mod, params, 1, 0);
+  
+
+  if (mod->estimate_branchlens == TM_SCALE_ONLY) { 
+                                /* also, do final scaling of tree if
+                                   estimating scale only */
+    tm_scale_branchlens(mod, mod->scale, 0);
+    mod->scale = 1;
+    if (mod->subtree_root != NULL) {  /* estimating subtree scale */
+      tr_scale_subtree(mod->tree, mod->subtree_root, mod->scale_sub, 1);
+      mod->scale_sub = 1;
+    } else if (mod->in_subtree != NULL) { /* internal branch scale */
+      TreeNode *n;
+      for (i=0; i<mod->tree->nnodes; i++)
+	if (mod->in_subtree[i]) {
+	  n = lst_get_ptr(mod->tree->nodes, i);
+	  n->dparent *= mod->scale_sub;
+	}
+      mod->scale_sub = 1;
+    }
+  }
+  
+  if (lower_bounds != NULL) vec_free(lower_bounds);
+  if (upper_bounds != NULL) vec_free(upper_bounds);
+
+  if (retval != 0) 
+    fprintf(stderr, "WARNING: BFGS algorithm reached its maximum number of iterations.\n");
+
+  return retval;
+}
+
 
 /* Fit several tree model objects simultaneously (parameters may be shared between them).
    msa should be an array of MSA's of length nmod, 

@@ -30,7 +30,7 @@
 #include "wrapper.help"
 
 
-int phyloFitWrapper() {
+int phyloFitWrapper(int* param_dim) {
   char *msa_fname = NULL, *alph = "ACGT";
   msa_format_type input_format = UNKNOWN_FORMAT;
   char c;
@@ -358,7 +358,7 @@ int phyloFitWrapper() {
   /* first label sites, if necessary */
   pf->label_categories = (input_format != MAF);
 
-  run_phyloFit(pf);
+  setup_phyloFit(pf, param_dim);
 
   if (pf->logf != NULL && pf->logf != stderr && pf->logf != stdout)
     phast_fclose(pf->logf);
@@ -369,5 +369,9 @@ int phyloFitWrapper() {
 }
 
 int main(){
-  return phyloFitWrapper();
+  int param_dim;
+  
+  phyloFitWrapper(&param_dim);
+  printf("dim= %d\n", param_dim);
+  return 0;
 }
