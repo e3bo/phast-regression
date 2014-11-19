@@ -431,7 +431,7 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
 
 int tm_setup(TreeModel *mod, MSA *msa, Vector *params, int cat, 
            opt_precision_type precision, FILE *logf, int quiet,
-             FILE *error_file, double (*freg)(Vector*, void*), void *data);
+             FILE *error_file, void *data);
 double tm_regression_likelihood_wrapper(Vector *beta_params, void *data);
 
 /** Fit several tree models (which share parameters) to data using BFGS

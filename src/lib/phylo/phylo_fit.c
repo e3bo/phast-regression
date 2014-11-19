@@ -1266,7 +1266,7 @@ int run_phyloFit(struct phyloFit_struct *pf) {
 }
 
 
-int setup_phyloFit(struct phyloFit_struct *pf, int *param_dim, double (*freg)(Vector*, void*), void *data) {
+int setup_phyloFit(struct phyloFit_struct *pf, void *data) {
   FILE *F, *WINDOWF=NULL;
   int i, j, win, root_leaf_id = -1;
   String *mod_fname;
@@ -1791,8 +1791,7 @@ int setup_phyloFit(struct phyloFit_struct *pf, int *param_dim, double (*freg)(Ve
           tm_fit_em(mod, msa, params, cat, pf->precision, pf->max_em_its, pf->logf, error_file);
         else
           //tm_fit(mod, msa, params, cat, pf->precision, pf->logf, pf->quiet, error_file);
-          tm_setup(mod, msa, params, cat, pf->precision, pf->logf, pf->quiet, error_file, freg, data);
-          *param_dim = mod->eta_coefficients->size;
+          tm_setup(mod, msa, params, cat, pf->precision, pf->logf, pf->quiet, error_file, data);
           //printf("fi = %g\n", freg(mod->eta_coefficients, data));
       }
       

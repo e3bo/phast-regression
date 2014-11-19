@@ -56,7 +56,7 @@ double tm_likelihood_wrapper(Vector *params, void *data);
 double tm_multi_likelihood_wrapper(Vector *params, void *data);
 Matrix *mat_project_smaller(Matrix *src, Vector *at_bounds, int params_at_bounds);
 Matrix *mat_project_larger(Matrix *src, Vector *at_bounds, int params_at_bounds);
-double tm_regression_likelihood_wrapper(Vector *beta_params, void *data);
+
 
 /* tree == NULL implies weight matrix (most other params ignored in
    this case) */
@@ -2095,12 +2095,10 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
 
 int tm_setup(TreeModel *mod, MSA *msa, Vector *params, int cat, 
            opt_precision_type precision, FILE *logf, int quiet,
-             FILE *error_file, double (*freg)(Vector*, void*), void *data) {
+             FILE *error_file, void *data) {
   double ll;
   Vector *lower_bounds, *upper_bounds, *opt_params, *beta_params;
   int i, retval = 0, npar, numeval;
-
-  //*freg = &tm_regression_likelihood_wrapper;
 
   if (msa->ss == NULL) {
     if (msa->seqs == NULL)
@@ -2171,14 +2169,11 @@ int tm_setup(TreeModel *mod, MSA *msa, Vector *params, int cat,
     mat_print(mod->eta_design_matrix, stderr);
   }
   *(TreeModel*) data = *mod;
-  //int foo  =4;
-  //*(int *) data = foo;
-  //printf("ll = %g\n", freg(beta_params, data));
   /*retval = opt_bfgs_regression(tm_likelihood_wrapper, opt_params, (void*)mod, &ll,
                                lower_bounds, upper_bounds, logf, NULL, precision,
                                NULL, &numeval, tm_regression_likelihood_wrapper, 
-                               beta_params, mod->npenalties);
-  mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
+                               beta_params, mod->npenalties);*/
+                               /*mod->lnL = ll * -1 * log(2); */ /* make negative again and convert to
                                  natural log scale */
   /*if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
   tm_unpack_params(mod, opt_params, -1);*/
