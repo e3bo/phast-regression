@@ -28,9 +28,9 @@
 #include <maf.h>
 #include <phylo_fit.h>
 #include "wrapper.help"
+#include <vector.h>
 
-
-int phyloFitWrapper(int* param_dim) {
+int phyloFitWrapper(int* param_dim, double (*freg)(Vector*, void*), void *data) {
   char *msa_fname = NULL, *alph = "ACGT";
   msa_format_type input_format = UNKNOWN_FORMAT;
   char c;
@@ -358,20 +358,36 @@ int phyloFitWrapper(int* param_dim) {
   /* first label sites, if necessary */
   pf->label_categories = (input_format != MAF);
 
-  setup_phyloFit(pf, param_dim);
+  setup_phyloFit(pf, param_dim, freg, data);
+
 
   if (pf->logf != NULL && pf->logf != stderr && pf->logf != stdout)
     phast_fclose(pf->logf);
   if (!pf->quiet) fprintf(stderr, "Done.\n");
-  sfree(pf);
+  //sfree(pf);
   
   return 0;
 }
 
 int main(){
   int param_dim;
+  double (*freg)(Vector*, void*) = tm_regression_likelihood_wrapper;
+  double obj=0;
+  TreeModel *data = (TreeModel*)smalloc(sizeof(TreeModel));
+  Vector *params;
+
+  phyloFitWrapper(&param_dim, freg, data);
+  printf("dim= %d\n", data->eta_coefficients->size);
   
-  phyloFitWrapper(&param_dim);
-  printf("dim= %d\n", param_dim);
+  params = vec_new(3);
+  vec_set_all(params, 1);
+  obj = freg(params, data);
+  vec_free(params);
+  printf("obj= %g\n", obj);
+
+
+  
   return 0;
 }
+
+

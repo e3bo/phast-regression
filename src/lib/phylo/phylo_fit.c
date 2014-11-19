@@ -1266,7 +1266,7 @@ int run_phyloFit(struct phyloFit_struct *pf) {
 }
 
 
-int setup_phyloFit(struct phyloFit_struct *pf, int *param_dim) {
+int setup_phyloFit(struct phyloFit_struct *pf, int *param_dim, double (*freg)(Vector*, void*), void *data) {
   FILE *F, *WINDOWF=NULL;
   int i, j, win, root_leaf_id = -1;
   String *mod_fname;
@@ -1791,20 +1791,22 @@ int setup_phyloFit(struct phyloFit_struct *pf, int *param_dim) {
           tm_fit_em(mod, msa, params, cat, pf->precision, pf->max_em_its, pf->logf, error_file);
         else
           //tm_fit(mod, msa, params, cat, pf->precision, pf->logf, pf->quiet, error_file);
-          //tm_setup(mod, msa, params, cat, pf->precision, pf->logf, pf->quiet, error_file);
+          tm_setup(mod, msa, params, cat, pf->precision, pf->logf, pf->quiet, error_file, freg, data);
           *param_dim = mod->eta_coefficients->size;
+          //printf("fi = %g\n", freg(mod->eta_coefficients, data));
       }
       
-      if (input_mod == NULL) tm_free(mod);
+      //if (input_mod == NULL) tm_free(mod);
       if (params != NULL) vec_free(params);
     }
-    if (pf->window_coords != NULL) 
-      msa_free(msa);
+    //if (pf->window_coords != NULL) 
+    //  msa_free(msa);
   }
   if (error_file != NULL) phast_fclose(error_file);
   if (parsimony_cost_file != NULL) phast_fclose(parsimony_cost_file); 
   str_free(mod_fname);
   str_free(tmpstr);
+  /*
   if (free_cm) {
     cm_free(pf->cm);
     pf->cm = NULL;
@@ -1822,7 +1824,7 @@ int setup_phyloFit(struct phyloFit_struct *pf, int *param_dim) {
     pf->window_coords = NULL;
   }
   if (gc != NULL)
-    sfree(gc);
+  sfree(gc);*/
   return 0;
 }
 

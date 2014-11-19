@@ -2095,10 +2095,12 @@ int tm_fit(TreeModel *mod, MSA *msa, Vector *params, int cat,
 
 int tm_setup(TreeModel *mod, MSA *msa, Vector *params, int cat, 
            opt_precision_type precision, FILE *logf, int quiet,
-	   FILE *error_file) {
+             FILE *error_file, double (*freg)(Vector*, void*), void *data) {
   double ll;
   Vector *lower_bounds, *upper_bounds, *opt_params, *beta_params;
   int i, retval = 0, npar, numeval;
+
+  //*freg = &tm_regression_likelihood_wrapper;
 
   if (msa->ss == NULL) {
     if (msa->seqs == NULL)
@@ -2168,14 +2170,18 @@ int tm_setup(TreeModel *mod, MSA *msa, Vector *params, int cat,
     fprintf(stderr, "design matrix: \n"); 
     mat_print(mod->eta_design_matrix, stderr);
   }
-  retval = opt_bfgs_regression(tm_likelihood_wrapper, opt_params, (void*)mod, &ll,
+  *(TreeModel*) data = *mod;
+  //int foo  =4;
+  //*(int *) data = foo;
+  //printf("ll = %g\n", freg(beta_params, data));
+  /*retval = opt_bfgs_regression(tm_likelihood_wrapper, opt_params, (void*)mod, &ll,
                                lower_bounds, upper_bounds, logf, NULL, precision,
                                NULL, &numeval, tm_regression_likelihood_wrapper, 
                                beta_params, mod->npenalties);
   mod->lnL = ll * -1 * log(2);  /* make negative again and convert to
                                  natural log scale */
-  if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
-  tm_unpack_params(mod, opt_params, -1);
+  /*if (!quiet) fprintf(stderr, "Done.  log(likelihood) = %f numeval=%i\n", mod->lnL, numeval);
+  tm_unpack_params(mod, opt_params, -1);*/
   vec_copy(mod->eta_coefficients, beta_params);
   vec_copy(params, mod->all_params);
   vec_free(opt_params);
@@ -2786,6 +2792,8 @@ double tm_regression_likelihood_wrapper(Vector *beta_params, void *data) {
   int i;
   double val, tmp;
 
+
+  
   X = mod->eta_design_matrix;
   rate_params = vec_new(X->nrows);
   mat_vec_mult(rate_params, X, beta_params);
