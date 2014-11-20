@@ -68,6 +68,7 @@ struct phyloFit_struct {
 
 struct phyloFit_struct* phyloFit_struct_new();
 int run_phyloFit(struct phyloFit_struct *pf);
+int setup_phyloFit(struct phyloFit_struct *pf, void *data);
 void print_post_prob_stats(TreeModel *mod, MSA *msa, char *output_fname_root, 
                            int do_bases, int do_expected_nsubst, 
                            int do_expected_nsubst_tot, 
