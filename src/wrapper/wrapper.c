@@ -29,6 +29,11 @@
 #include <phylo_fit.h>
 #include "wrapper.help"
 
+
+#define DERIV_EPSILON 1e-6      /* for numerical computation of
+                                   derivatives */
+
+
 int phyloFitWrapper(void *data) {
   char *msa_fname = NULL, *alph = "ACGT";
   msa_format_type input_format = UNKNOWN_FORMAT;
@@ -372,17 +377,30 @@ int main(){
 
   double obj=0;
   TreeModel *data = (TreeModel*)smalloc(sizeof(TreeModel));
-  Vector *params;
+  Vector *params, *greg, *lower_bounds, *upper_bounds;
+  opt_deriv_method deriv_method = OPT_DERIV_FORWARD;
+  double deriv_epsilon = DERIV_EPSILON;
 
   phyloFitWrapper(data);
   printf("dim= %d\n", data->eta_coefficients->size);
   
   params = vec_new(3);
+  greg = vec_new(3);
+  lower_bounds = vec_new(3);
+  upper_bounds = vec_new(3);
+  vec_set_all(lower_bounds, 0);
+  vec_set_all(upper_bounds, 100);
+  
   vec_set_all(params, 1);
   vec_set(params, 2, 0);
   obj = tm_regression_likelihood_wrapper(params, data);
-  vec_free(params);
+  
   printf("obj= %g\n", obj);
+
+  opt_gradient(greg, tm_regression_likelihood_wrapper, params, data, deriv_method, obj,
+                   lower_bounds, upper_bounds, deriv_epsilon);
+  vec_print(greg, stdout);
+  vec_free(params);
   
   return 0;
 }
