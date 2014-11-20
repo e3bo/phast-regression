@@ -373,7 +373,7 @@ int phyloFitWrapper(void *data) {
   return 0;
 }
 
-int main(){
+int smain(){
 
   double obj=0;
   TreeModel *data = (TreeModel*)smalloc(sizeof(TreeModel));
