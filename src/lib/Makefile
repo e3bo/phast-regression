@@ -3,7 +3,7 @@ PHAST := ${PHAST}/..
 
 CDIR = ${PWD}
 
-PACKAGES=base msa feature hmm phylo phylo_hmm motif pcre
+PACKAGES=base msa feature hmm phylo phylo_hmm motif pcre wrapper
 
 ifdef RPHAST
 PACKAGES += rphast
