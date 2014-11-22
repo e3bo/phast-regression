@@ -8,7 +8,7 @@
  ***************************************************************************/
 
 /* phyloFit - fit phylogenetic model(s) to a multiple alignment */
- 
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <lists.h>
@@ -28,7 +28,6 @@
 #include <maf.h>
 #include <phylo_fit.h>
 #include "wrapper.help"
-
 
 #define DERIV_EPSILON 1e-6      /* for numerical computation of
                                    derivatives */
