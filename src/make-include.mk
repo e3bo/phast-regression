@@ -71,12 +71,20 @@ ifndef RPHAST
 # the following line should be uncommented during phast development
 # to make sure RPHAST C files stay up-to-date.
 # Not necessary for installing phast or RPHAST.
-#RPHAST = T
+# RPHAST = T
 ifdef RPHAST
 RDIR=/usr/share/R/include
 CFLAGS += -fPIC -I${RDIR}
 endif
 endif
+
+
+RDIR=/usr/include/R
+CFLAGS += -fPIC -I${RDIR} -DR_LAPACK
+LIBS = -lphast -lc -lm -llapack -lblas
+
+
+ifdef 0
 
 # The next section is concerned with the LAPACK linear algebra
 # package, which is used by PHAST for matrix diagonalization and
@@ -159,4 +167,4 @@ else
 endif
 endif
 endif
-
+endif
