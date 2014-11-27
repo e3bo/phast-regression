@@ -170,7 +170,7 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->iupac_inv_map = NULL;
   
   /* attributes needed when fitting regression model to rates*/
-  int ncoef = 3;
+  int ncoef = 73;
   int narcs = nstate*(nstate - 1);
   FILE *designMat = fopen("designMat2", "r");
   tm->eta_design_matrix = mat_new_from_file(designMat, narcs, ncoef);
@@ -2794,7 +2794,7 @@ double tm_regression_likelihood_wrapper(Vector *beta_params, void *data) {
   mat_vec_mult(rate_params, X, beta_params);
   for(i = 0; i < rate_params->size; i++){
     tmp = vec_get(rate_params, i);
-    /*tmp = exp(tmp);*/
+    tmp = exp(tmp);
     vec_set(rate_params, i, tmp);
   }
   val = tm_likelihood_wrapper(rate_params, data);
