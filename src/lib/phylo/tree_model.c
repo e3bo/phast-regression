@@ -170,7 +170,7 @@ TreeModel *tm_new(TreeNode *tree, MarkovMatrix *rate_matrix,
   tm->iupac_inv_map = NULL;
   
   /* attributes needed when fitting regression model to rates*/
-  int ncoef = 73;
+  int ncoef = 34;
   int narcs = nstate*(nstate - 1);
   FILE *designMat = fopen("designMat2", "r");
   tm->eta_design_matrix = mat_new_from_file(designMat, narcs, ncoef);
