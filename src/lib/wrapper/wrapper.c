@@ -34,7 +34,7 @@
 
 
 int phyloFitWrapper(void *data) {
-  char *msa_fname = NULL, *alph = "TCGA";
+  char *msa_fname = NULL, *alph = "ABCDEFGHIJKLMNO";
   msa_format_type input_format = UNKNOWN_FORMAT;
   char c;
   int opt_idx, seed=-1;
