@@ -1,0 +1,17 @@
+Copyright: The code in src/pcre is Copyright (c) 1997-2010 University
+        of Cambridge.  Original PHAST code is Copyright (c) 2002-2010
+        University of California, Cornell University.
+Package: rphastRegression
+Maintainer: Eamon O'Dea <odea35@gmail.com>
+License: BSD_3_clause + file LICENSE
+Title: R interface to phast-regession
+Description: Experimental code to fit linear models to subsitution rates in phylogenetic Markov Models
+Version: 0.0.1
+Author: The original PHAST code was written by the authors of rphast package on CRAN, extensions are by E. O'Dea
+URL: notebook.ebodea.name
+Date: 2014-11-12
+Depends: stats
+Suggests: ape, seqLogo
+Collate: 'bgc.R' 'checkArgs.R' 'feat.R' 'hmm.R' 'listOfLists.R' 'msa.R'
+        'optim.R' 'phastCons.R' 'phyloFit.R' 'phyloP.R' 'plot.R'
+        'rphast.R' 'treeModel.R' 'trees.R' 'zzz.R'

@@ -1,0 +1,10 @@
+*.log
+*.[oa]
+*.help
+*.so
+*.pdf
+*.zip
+\#*#
+doc/
+bin/
+clapack-3.2.1-CMAKE

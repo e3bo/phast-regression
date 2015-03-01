@@ -1,0 +1,30 @@
+\name{sort.feat}
+\alias{sort.feat}
+\title{Sort a GFF}
+\usage{
+  \method{sort}{feat} (x, decreasing = FALSE, ...)
+}
+\arguments{
+  \item{x}{An object of type \code{feat}}
+
+  \item{decreasing}{Set to TRUE to sort from highest to
+  lowest coordinates}
+
+  \item{...}{Currently not used}
+}
+\value{
+  An object of type \code{feat} sorted primarily by
+  seqname, then by start position, then by end position.
+}
+\description{
+  Sort a GFF
+}
+\note{
+  If x is stored as a pointer to an object in C, the object
+  will be modified to the return value.
+}
+\author{
+  Melissa J. Hubisz and Adam Siepel
+}
+\keyword{features}
+

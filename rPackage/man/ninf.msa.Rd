@@ -1,0 +1,26 @@
+\name{ninf.msa}
+\alias{ninf.msa}
+\title{The number of informative columns in an alignment}
+\usage{
+  ninf.msa(x)
+}
+\arguments{
+  \item{x}{An object of type \code{msa}}
+}
+\value{
+  The number of "informative" columns in the msa.  An
+  informative column has at least two non-missing and
+  non-gap characters.
+}
+\description{
+  The number of informative columns in an alignment
+}
+\author{
+  Melissa J. Hubisz and Adam Siepel
+}
+\seealso{
+  \code{pairwise.diff.msa} To get differences per base
+  between pairs of sequences
+}
+\keyword{msa}
+

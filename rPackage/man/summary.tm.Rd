@@ -1,0 +1,30 @@
+\name{summary.tm}
+\alias{summary.tm}
+\title{Tree Model Summary}
+\usage{
+  \method{summary}{tm} (object, ...)
+}
+\arguments{
+  \item{object}{An object of class tm}
+
+  \item{...}{Parameters to be passed to/from other
+  functions}
+}
+\description{
+  Tree model summary
+}
+\examples{
+exampleArchive <- system.file("extdata", "examples.zip", package="rphast")
+filename <- "rev.mod"
+unzip(exampleArchive, filename)
+read.tm(filename)
+unlink(c(filename, "test.mod"))
+}
+\author{
+  Melissa J. Hubisz and Adam Siepel
+}
+\seealso{
+  \code{\link{tm}}
+}
+\keyword{tm}
+

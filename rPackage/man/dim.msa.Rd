@@ -1,0 +1,22 @@
+\name{dim.msa}
+\alias{dim.msa}
+\title{Returns the dimensions of an msa object as (# of species, # of columns)}
+\usage{
+  \method{dim}{msa} (x)
+}
+\arguments{
+  \item{x}{An object of type \code{msa}}
+}
+\value{
+  An integer vector of length two giving number of species
+  and number of columns in the alignment
+}
+\description{
+  Returns the dimensions of an msa object as (# of species,
+  # of columns)
+}
+\author{
+  Melissa J. Hubisz and Adam Siepel
+}
+\keyword{msa}
+

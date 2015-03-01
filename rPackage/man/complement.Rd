@@ -1,0 +1,22 @@
+\name{complement}
+\alias{complement}
+\title{complement}
+\usage{
+  complement(x)
+}
+\arguments{
+  \item{x}{A character vector with DNA sequences to be
+  complemented}
+}
+\value{
+  The complement of the given sequence(s).  Characters
+  other than A,C,G,T,a,c,g,t are unchanged.
+}
+\description{
+  DNA complement
+}
+\author{
+  Melissa J. Hubisz
+}
+\keyword{msa}
+
